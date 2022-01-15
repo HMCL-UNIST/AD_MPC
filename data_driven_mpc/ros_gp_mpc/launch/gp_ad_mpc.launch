@@ -2,8 +2,8 @@
 <launch>
     <!-- true if running the nodes in the gazebo simulator environment. false if running on the real platform-->
     
-    <!-- Stable version: Use time horizon of 1 second, 10 control nodes and control @ 50 Hz (control_freq_factor=5) -->
-    <arg name="t_horizon" default="1"/>
+    <!-- Stable version: Use time horizon of 2 second, 10 control nodes and control @ 50 Hz (control_freq_factor=5) -->
+    <arg name="t_horizon" default="2"/>
     <arg name="n_nodes" default="10"/>
 
 

@@ -20,27 +20,28 @@ import numpy as np
 import std_msgs.msg
 import rospy
 import os
+from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped
 
 
 def custom_ad_param_loader(ad_name):
 
-    this_path = os.path.dirname(os.path.realpath(__file__))
-    params_file = os.path.join(this_path, '..', '..', 'config', ad_name + '.xacro')
-    # Get parameters for AD
-    attrib = parse_xacro_file(params_file)
-    ad = AD3D(noisy=False)
-    ad.mass = float(attrib['mass']) + float(attrib['mass_rotor']) * 4
-    ad.J = np.array([float(attrib['body_inertia'][0]['ixx']),
-                       float(attrib['body_inertia'][0]['iyy']),
-                       float(attrib['body_inertia'][0]['izz'])])
-  
+    # this_path = os.path.dirname(os.path.realpath(__file__))
+    # params_file = os.path.join(this_path, '..', '..', 'config', ad_name + '.xacro')
+    # # Get parameters for AD
+    # attrib = parse_xacro_file(params_file)
+    ad = AD3D(noisy=False, noisy_input= False)
+    # ad.mass = float(attrib['mass']) + float(attrib['mass_rotor']) * 4
+    # ad.J = np.array([float(attrib['body_inertia'][0]['ixx']),
+    #                    float(attrib['body_inertia'][0]['iyy']),
+    #                    float(attrib['body_inertia'][0]['izz'])])
+    
     return ad
 
 
 class ROSGPMPC:
     def __init__(self, t_horizon, n_mpc_nodes, opt_dt, ad_name = "sim_car", point_reference=False):
 
-        quad = custom_ad_param_loader(ad_name)  
+        ad = custom_ad_param_loader(ad_name)  
 
         # Initialize quad MPC
         if point_reference:
@@ -54,40 +55,25 @@ class ROSGPMPC:
                 "terminal_cost": False
             }
 
-        q_diagonal = np.array([0.5, 0.5, 0.5, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05, 0.01, 0.01, 0.01])
-        r_diagonal = np.array([1.0, 1.0, 1.0, 1.0])
+        q_diagonal = np.array([1.0, 1.0, 10.0, 0.0])
+        r_diagonal = np.array([10.0, 100.0])        
 
-        q_mask = np.array([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]).T
+        ad_mpc = AD3DMPC(ad, t_horizon=t_horizon, optimization_dt=opt_dt, n_nodes=n_mpc_nodes, 
+                            model_name=ad_name, solver_options=acados_config, q_cost=q_diagonal, r_cost=r_diagonal)
 
-        quad_mpc = Quad3DMPC(ad, t_horizon=t_horizon, optimization_dt=opt_dt, n_nodes=n_mpc_nodes,
-                             pre_trained_models=gp_models, model_name=ad_name, solver_options=acados_config,
-                             q_mask=q_mask, q_cost=q_diagonal, r_cost=r_diagonal, rdrv_d_mat=rdrv)
-
-        self.quad_name = ad_name
-        self.quad = add_preshutdown_hook
-        self.quad_mpc = quad_mpc
+        self.ad_name = ad_name
+        self.ad = ad
+        self.ad_mpc = ad_mpc
 
         # Last optimization
         self.last_w = None
 
     def set_state(self, x):
         """
-        Set quadrotor state estimate from an odometry measurement
+        Set state estimate from an odometry measurement
         :param x: measured state from odometry. List with 13 components with the format: [p_xyz, q_wxyz, v_xyz, w_xyz]
         """
-
         self.ad.set_state(x)
-
-    def set_gp_state(self, x):
-        """
-        Set a quadrotor state estimate from an odometry measurement. While the input state in the function set_state()
-        will be used as initial state for the MPC optimization, the input state of this function will be used to
-        evaluate the GP's. If this function is never called, then the GP's will be evaluated with the state from
-        set_state() too.
-        :param x: measured state from odometry. List with 13 components with the format: [p_xyz, q_wxyz, v_xyz, w_xyz]
-        """
-
-        self.ad.set_gp_state(x)
 
     def set_reference(self, x_ref, u_ref):
         """
@@ -97,29 +83,19 @@ class ROSGPMPC:
         then they are interpreted as a sequence of N tracking points.
         :param u_ref: Optional target for the optimized control inputs
         """
-
-        return self.quad_mpc.set_reference(x_reference=x_ref, u_reference=u_ref)
+        return self.ad_mpc.set_reference(x_reference=x_ref, u_reference=u_ref)
 
     def optimize(self, model_data):
-
-        w_opt, x_opt = self.quad_mpc.optimize(use_model=model_data, return_x=True)
-
+        w_opt, x_opt = self.ad_mpc.optimize(use_model=model_data, return_x=True)
         # Remember solution for next optimization
-        self.last_w = self.quad_mpc.reshape_input_sequence(w_opt)
+        # self.last_w = self.ad_mpc.reshape_input_sequence(w_opt)
+        next_control_with_stamp = AckermannDriveStamped()                
+        next_control_with_stamp.header = std_msgs.msg.Header()
+        next_control_with_stamp.header.stamp = rospy.Time.now()        
+        next_control_with_stamp.steering_angle = w_opt[1]
+        # next_control_with_stamp.steering_angle_velocity = 
+        next_control_with_stamp.speed = x_opt[1,3]
+        next_control_with_stamp.acceleration = w_opt[0]        
+        # next_control_with_stamp.jerk = 
 
-        next_control = ControlCommand()
-        next_control.header = std_msgs.msg.Header()
-        next_control.header.stamp = rospy.Time.now()
-        next_control.control_mode = 2
-        next_control.armed = True
-        next_control.collective_thrust = np.sum(w_opt[:4]) * self.quad.max_thrust / self.quad.mass
-        next_control.bodyrates.x = x_opt[1, -3]
-        next_control.bodyrates.y = x_opt[1, -2]
-        next_control.bodyrates.z = x_opt[1, -1]
-        next_control.rotor_thrusts = w_opt[:4] * self.quad.max_thrust
-
-        # Something is off with the colibri
-        if self.quad_name == "colibri":
-            next_control.collective_thrust -= 1.8
-
-        return next_control, w_opt
+        return next_control_with_stamp, w_opt

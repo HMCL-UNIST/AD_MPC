@@ -839,3 +839,17 @@ def separate_variables(traj):
     v_traj = traj[:, 7:10]
     r_traj = traj[:, 10:]
     return [p_traj, a_traj, v_traj, r_traj]
+
+
+def wrap_to_pi(angle):
+    """
+    :param angle: (float)
+    :return: (float) Angle in radian in [-pi, pi]
+    """
+    while angle > np.pi:
+        angle -= 2.0 * np.pi
+
+    while angle < -np.pi:
+        angle += 2.0 * np.pi
+
+    return angle 
