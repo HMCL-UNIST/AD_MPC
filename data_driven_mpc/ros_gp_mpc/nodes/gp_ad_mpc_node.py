@@ -32,8 +32,8 @@ from utils.visualization import trajectory_tracking_results, mse_tracking_experi
 from experiments.point_tracking_and_record import make_record_dict, get_record_file_and_dir, check_out_data
 from model_fitting.rdrv_fitting import load_rdrv
 
-from utils.utils import quaternion_to_euler, skew_symmetric, v_dot_q, unit_quat, quaternion_inverse, wrap_to_pi
-
+from utils.utils import quaternion_to_euler, skew_symmetric, v_dot_q, unit_quat, quaternion_inverse, wrap_to_pi, euler_to_quaternion
+from ad_mpc.ref_traj import RefTrajectory
 
 from visualization_msgs.msg import MarkerArray, Marker
 
@@ -42,8 +42,9 @@ class GPMPCWrapper:
     def __init__(self,environment="carla"):
 
         # Control at 50 (sim) or 60 (real) hz. Use time horizon=1 and 10 nodes
-        self.n_mpc_nodes = rospy.get_param('~n_nodes', default=10)
+        self.n_mpc_nodes = rospy.get_param('~n_nodes', default=10.0)
         self.t_horizon = rospy.get_param('~t_horizon', default=2.0)
+        self.traj_resample_vel = rospy.get_param('~traj_resample_vel', default=True)        
         self.control_freq_factor = rospy.get_param('~control_freq_factor', default=5 if environment == "carla" else 6)
         self.opt_dt = self.t_horizon / (self.n_mpc_nodes * self.control_freq_factor)
 #################################################################        
@@ -68,6 +69,9 @@ class GPMPCWrapper:
         # self.ad_trajectory = None
         # self.ad_controls = None
         # self.w_control = None
+        
+        # set up reference generator
+        self.ref_gen = RefTrajectory(traj_horizon=self.n_mpc_nodes, traj_dt=self.t_horizon/self.n_mpc_nodes)
 
         # To measure optimization elapsed time
         self.optimization_dt = 0
@@ -162,7 +166,7 @@ class GPMPCWrapper:
         if self.vehicle_status_available is False:
             self.vehicle_status_available = True        
         
-    def waypoint_visualize(self,msg):
+    def waypoint_visualize(self):
         
         marker_refs = MarkerArray() 
         for i, x_ref in enumerate(self.x_ref):
@@ -171,19 +175,22 @@ class GPMPCWrapper:
             marker_ref.ns = "mpc_ref"+str(i)
             marker_ref.id = i
             marker_ref.type = Marker.ARROW
-            marker_ref.action = Marker.ADD
+            marker_ref.action = Marker.ADD                
             marker_ref.pose.position.x = self.x_ref[i] 
-            marker_ref.pose.position.y = self.y_ref[i]                        
-            marker_ref.pose.orientation.x = msg.waypoints[i].pose.pose.orientation.x
-            marker_ref.pose.orientation.y = msg.waypoints[i].pose.pose.orientation.y
-            marker_ref.pose.orientation.z = msg.waypoints[i].pose.pose.orientation.z
-            marker_ref.pose.orientation.w = msg.waypoints[i].pose.pose.orientation.w
+            marker_ref.pose.position.y = self.y_ref[i]              
+            quat_tmp = euler_to_quaternion(0.0, 0.0, self.psi_ref[i])                      
+            marker_ref.pose.orientation.w = quat_tmp[0]
+            marker_ref.pose.orientation.x = quat_tmp[1]
+            marker_ref.pose.orientation.y = quat_tmp[2]
+            marker_ref.pose.orientation.z = quat_tmp[3]
             marker_ref.color.r, marker_ref.color.g, marker_ref.color.b = (255, 0, 0)
             marker_ref.color.a = 0.5
             marker_ref.scale.x, marker_ref.scale.y, marker_ref.scale.z = (0.8, 0.3, 0.2)
             marker_refs.markers.append(marker_ref)
             i+=1
         self.ref_puf_publisher.publish(marker_refs)
+        
+        
 
 
     def waypoint_callback(self, msg):
@@ -195,16 +202,27 @@ class GPMPCWrapper:
             self.waypoint_available = True
             
         if len(msg.waypoints) > 0:                         
+            # received messages 
             self.x_ref = [msg.waypoints[i].pose.pose.position.x for i in range(len(msg.waypoints))]
             self.y_ref = [msg.waypoints[i].pose.pose.position.y for i in range(len(msg.waypoints))]            
             quat_to_euler_lambda = lambda o: quaternion_to_euler([o[0], o[1], o[2], o[3]])            
             self.psi_ref = [quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2] for i in range(len(msg.waypoints))]            
             self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
-            # rospy.loginfo(self.psi_ref)
-            self.waypoint_visualize(msg)
+            
+            # resample trajectory with respect to vel_ref 
+            if self.traj_resample_vel:                        
+                self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
+                waypoint_dict = self.ref_gen.get_waypoints(self.x_ref[0], self.y_ref[0], self.psi_ref[0])
+                self.x_ref = waypoint_dict['x_ref']
+                self.y_ref = waypoint_dict['y_ref']
+                self.psi_ref = waypoint_dict['psi_ref']
+                self.vel_ref = waypoint_dict['v_ref']
+                
+            self.waypoint_visualize()
         else:
             rospy.loginfo("Waypoints are empty")        
         rospy.loginfo("New waypoints received")
+        
   
     def pose_callback(self, msg):
         """                
