@@ -55,7 +55,7 @@ class ROSGPMPC:
                 "terminal_cost": False
             }
 
-        q_diagonal = np.array([1.0, 1.0, 1.0, 10.0])
+        q_diagonal = np.array([1.0, 1.0, 10.0, 10.0])
         r_diagonal = np.array([10.0, 100.0])        
 
         ad_mpc = AD3DMPC(ad, t_horizon=t_horizon, optimization_dt=opt_dt, n_nodes=n_mpc_nodes, 
@@ -75,7 +75,7 @@ class ROSGPMPC:
         """
         self.ad.set_state(x)
 
-    def set_reference(self, x_ref, u_ref):
+    def set_reference(self, x_ref, u_ref, terminal_point = False):
         """
         Set a reference state for the optimizer.
         :param x_ref: list with 4 sub-components (position, angle quaternion, velocity, body rate). If these four
@@ -83,7 +83,7 @@ class ROSGPMPC:
         then they are interpreted as a sequence of N tracking points.
         :param u_ref: Optional target for the optimized control inputs
         """
-        return self.ad_mpc.set_reference(x_reference=x_ref, u_reference=u_ref)
+        return self.ad_mpc.set_reference(x_reference=x_ref, u_reference=u_ref, terminal_point = terminal_point)
 
     def optimize(self, model_data):
         w_opt, x_opt = self.ad_mpc.optimize(use_model=model_data, return_x=True)
@@ -94,8 +94,7 @@ class ROSGPMPC:
         next_control_with_stamp.header.stamp = rospy.Time.now()        
         next_control_with_stamp.drive.steering_angle = w_opt[1]
         # next_control_with_stamp.steering_angle_velocity = 
-        next_control_with_stamp.drive.speed = x_opt[2,3]        
-        print(x_opt[:,3])
+        next_control_with_stamp.drive.speed = x_opt[3,3]                
         next_control_with_stamp.drive.acceleration = w_opt[0]        
         # next_control_with_stamp.jerk = 
 

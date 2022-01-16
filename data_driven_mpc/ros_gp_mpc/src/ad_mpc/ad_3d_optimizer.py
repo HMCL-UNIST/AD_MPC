@@ -251,8 +251,9 @@ class AD3DOptimizer:
         self.target = copy(x_target)
         gp_ind = 0
         ref = np.concatenate((x_target, u_target))
+        x_target = np.array(x_target)
         for j in range(self.N):
-            self.acados_ocp_solver[gp_ind].set(j, "yref", x_target)
+            self.acados_ocp_solver[gp_ind].set(j, "yref", ref)
         self.acados_ocp_solver[gp_ind].set(self.N, "yref", x_target)
         return gp_ind
 

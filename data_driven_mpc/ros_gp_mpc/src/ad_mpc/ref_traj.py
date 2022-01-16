@@ -15,11 +15,15 @@ def compute_curvature(cdists, psis):
 	assert np.max( np.abs(diff_psis) )  < np.pi, "Detected a jump in the angle difference."
 
 	curv_raw = diff_psis / np.maximum(diff_dists, 0.1) # use diff_dists where greater than 10 cm	
-	curv_raw = np.insert(curv_raw, len(curv_raw), curv_raw[-1]) # curvature at last waypoint
-
+	curv_raw = np.insert(curv_raw, len(curv_raw), curv_raw[-1]) # curvature at last waypoint	
+	if len(curv_raw) > 33:
+		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw) # curvature filter suggested by Jinkkwon Kim.
+	else:
+		curv_filt = curv_raw
 	# Curvature Filtering: (https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html)
-	curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw,padlen = 0) # curvature filter suggested by Jinkkwon Kim.
+	
 	return curv_filt
+	
 
 def bound_angle_within_pi(angle):
 	return (angle + np.pi) % (2.0 * np.pi) - np.pi # https://stackoverflow.com/questions/15927755/opposite-of-numpy-unwrap
@@ -86,6 +90,7 @@ class RefTrajectory():
 		if self.access_map is None:
 			rospy.loginfo("trajectory has not been set")
 			return
+		psi_init = bound_angle_within_pi(psi_init)
 
 		waypoint_dict = {}
 		xy_traj = self.trajectory[ :, [self.access_map['x'], self.access_map['y']] ] # XY trajectory
@@ -118,6 +123,8 @@ class RefTrajectory():
 			# Given a velocity reference, use the cumulative distance for interpolation.
 		start_dist = self.trajectory[closest_index, self.access_map['cdist']]			
 		interp_by_key = 'cdist'
+		while len(vel_references) < self.traj_horizon+1:
+			vel_references = np.concatenate((vel_references, [0.0001]))
 		interp_to_fit = [h*self.traj_dt*vel_references[h] + start_dist for h in range(1, self.traj_horizon+1)]
 		
 		for waypoint_key in ['x', 'y', 'psi', 'cdist', 'curv']:

@@ -59,7 +59,7 @@ class AD3DMPC:
         x = np.expand_dims(self.ad.get_state(stacked=True), 1)
         return x
 
-    def set_reference(self, x_reference, u_reference=None):
+    def set_reference(self, x_reference, u_reference=None, terminal_point = False):
         """
         Sets a target state for the MPC optimizer
         :param x_reference: list with 4 sub-components (position, angle quaternion, velocity, body rate). If these four
@@ -68,7 +68,7 @@ class AD3DMPC:
         :param u_reference: Optional target for the optimized control inputs
         """
 
-        if isinstance(x_reference[0], list):
+        if isinstance(x_reference[0], list) or terminal_point:
             # Target state is just a point
             return self.ad_opt.set_reference_state(x_reference, u_reference)
         else:

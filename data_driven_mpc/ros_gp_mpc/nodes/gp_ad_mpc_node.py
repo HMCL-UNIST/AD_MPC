@@ -61,6 +61,8 @@ class GPMPCWrapper:
         # Last references. Use hovering activation as input reference
         self.last_x_ref = None
         self.last_u_ref = None
+
+        self.end_of_goal = False
     
         # Reference trajectory variables
         self.x_ref = None
@@ -109,6 +111,7 @@ class GPMPCWrapper:
         # Publishers
         self.control_pub = rospy.Publisher(control_topic, AckermannDrive, queue_size=1, tcp_nodelay=True)
         self.ref_puf_publisher = rospy.Publisher("/mpc_ref_trajectory", MarkerArray, queue_size=1)
+        self.final_ref_publisher = rospy.Publisher("/final_trajectory", MarkerArray, queue_size=1)
         # Subscribers
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_callback)
         self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
@@ -125,7 +128,7 @@ class GPMPCWrapper:
 
  
     
-    def run_mpc(self, odom, recording=True):
+    def run_mpc(self, odom, x_ref,y_ref,psi_ref,vel_ref, recording=True):
         """
         :param odom: message from subscriber.
         :type odom: Odometry
@@ -140,15 +143,22 @@ class GPMPCWrapper:
         dt = odom.header.stamp.to_time() - self.last_update_time
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
-        ref = np.zeros([4,len(self.x_ref)])
-        ref[0] = self.x_ref
-        ref[1] = self.y_ref
-        ref[2] = self.psi_ref
-        ref[3] = self.vel_ref
-        ref = ref.transpose()
-
+        if self.end_of_goal or len(self.x_ref) < self.n_mpc_nodes:
+            ref = [x_ref[-1], y_ref[-1], psi_ref[-1], 0.0]
+            u_ref = [0.0, 0.0]   
+            terminal_point = True               
+        else:        
+            ref = np.zeros([4,len(x_ref)])
+            ref[0] = x_ref
+            ref[1] = y_ref
+            ref[2] = psi_ref
+            ref[3] = vel_ref
+            ref = ref.transpose()
+            u_ref = np.zeros((len(x_ref)-1,2))
+            terminal_point = False
+            
         
-
+        
         # pose = np.array([self.x_ref,self.y_ref])
         # psi = np.array(self.psi_ref)
         # if self.velocity is None:
@@ -158,8 +168,8 @@ class GPMPCWrapper:
         
         # ref_ = np.array([self.x_ref, self.y_ref, self.psi_ref, self.vel_ref])
         
-        u_ref = np.zeros((len(self.x_ref)-1,2))
-        model_data = self.gp_mpc.set_reference(ref,u_ref)
+        
+        model_data = self.gp_mpc.set_reference(ref,u_ref,terminal_point)
     
         # Run MPC and publish control
         try:
@@ -187,8 +197,32 @@ class GPMPCWrapper:
         if self.vehicle_status_available is False:
             self.vehicle_status_available = True        
         
-    def waypoint_visualize(self):
+    def waypoint_visualize(self,x_ref,y_ref,psi_ref):
         
+        marker_refs = MarkerArray() 
+        for i, xx in enumerate(x_ref):
+            marker_ref = Marker()
+            marker_ref.header.frame_id = "map"  
+            marker_ref.ns = "mpc_ref"+str(i)
+            marker_ref.id = i
+            marker_ref.type = Marker.ARROW
+            marker_ref.action = Marker.ADD                
+            marker_ref.pose.position.x = x_ref[i] 
+            marker_ref.pose.position.y = y_ref[i]              
+            quat_tmp = euler_to_quaternion(0.0, 0.0, psi_ref[i])     
+            quat_tmp = unit_quat(quat_tmp)                 
+            marker_ref.pose.orientation.w = quat_tmp[0]
+            marker_ref.pose.orientation.x = quat_tmp[1]
+            marker_ref.pose.orientation.y = quat_tmp[2]
+            marker_ref.pose.orientation.z = quat_tmp[3]
+            marker_ref.color.r, marker_ref.color.g, marker_ref.color.b = (255, 0, 0)
+            marker_ref.color.a = 0.5
+            marker_ref.scale.x, marker_ref.scale.y, marker_ref.scale.z = (0.8, 0.3, 0.2)
+            marker_refs.markers.append(marker_ref)
+            i+=1
+        self.ref_puf_publisher.publish(marker_refs)
+    
+    def final_waypoint_visualize(self):
         marker_refs = MarkerArray() 
         for i, x_ref in enumerate(self.x_ref):
             marker_ref = Marker()
@@ -200,47 +234,57 @@ class GPMPCWrapper:
             marker_ref.pose.position.x = self.x_ref[i] 
             marker_ref.pose.position.y = self.y_ref[i]              
             quat_tmp = euler_to_quaternion(0.0, 0.0, self.psi_ref[i])                      
+            quat_tmp = unit_quat(quat_tmp)
             marker_ref.pose.orientation.w = quat_tmp[0]
             marker_ref.pose.orientation.x = quat_tmp[1]
             marker_ref.pose.orientation.y = quat_tmp[2]
             marker_ref.pose.orientation.z = quat_tmp[3]
-            marker_ref.color.r, marker_ref.color.g, marker_ref.color.b = (255, 0, 0)
+            marker_ref.color.r, marker_ref.color.g, marker_ref.color.b = (0, 0, 255)
             marker_ref.color.a = 0.5
-            marker_ref.scale.x, marker_ref.scale.y, marker_ref.scale.z = (0.8, 0.3, 0.2)
+            marker_ref.scale.x, marker_ref.scale.y, marker_ref.scale.z = (0.5, 0.4, 0.3)
             marker_refs.markers.append(marker_ref)
             i+=1
-        self.ref_puf_publisher.publish(marker_refs)
-        
-        
+        self.final_ref_publisher.publish(marker_refs)
+    
 
 
     def waypoint_callback(self, msg):
         """
         :type msg: autoware_msgs/Lane 
         """                
+        if len(msg.waypoints) < 5:
+            self.end_of_goal = True
+        else:
+            self.end_of_goal = False
+        
+        msg.waypoints = msg.waypoints[1:-1]
         if not self.waypoint_available:
             self.waypoint_available = True
-            
-        if len(msg.waypoints) > 0:                         
-            # received messages 
+        
+        if len(msg.waypoints) > 2:                         
+            # received messages             
+            # msg.waypoints = msg.waypoints[0:]
             self.x_ref = [msg.waypoints[i].pose.pose.position.x for i in range(len(msg.waypoints))]
             self.y_ref = [msg.waypoints[i].pose.pose.position.y for i in range(len(msg.waypoints))]            
             quat_to_euler_lambda = lambda o: quaternion_to_euler([o[0], o[1], o[2], o[3]])            
             self.psi_ref = [quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2] for i in range(len(msg.waypoints))]            
             self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
-            
+            # self.final_waypoint_visualize()
             # resample trajectory with respect to vel_ref 
-            if self.traj_resample_vel and len(self.x_ref) > 3:                        
-                self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
-                waypoint_dict = self.ref_gen.get_waypoints(self.x_ref[0], self.y_ref[0], self.psi_ref[0])
-                self.x_ref = waypoint_dict['x_ref']
-                self.y_ref = waypoint_dict['y_ref']
-                self.psi_ref = waypoint_dict['psi_ref']
-                self.vel_ref = waypoint_dict['v_ref']
-                
-            self.waypoint_visualize()
+            # if self.traj_resample_vel and len(self.x_ref) > 33:                        
+            self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
         else:
-            rospy.loginfo("Waypoints are empty")        
+            rospy.loginfo("Waypoints are empty")    
+            self.end_of_goal = True    
+            
+        # if len(msg.waypoints) > 10:
+            
+                # waypoint_dict = self.ref_gen.get_waypoints(self.x_ref[0], self.y_ref[0], self.psi_ref[0])
+                # self.x_ref = waypoint_dict['x_ref']
+                # self.y_ref = waypoint_dict['y_ref']
+                # self.psi_ref = waypoint_dict['psi_ref']
+                # self.vel_ref = waypoint_dict['v_ref']
+        
         
         
   
@@ -264,6 +308,20 @@ class GPMPCWrapper:
         try:
             # Update the state estimate of the quad
             self.gp_mpc.set_state(self.x)
+            # reset the reference traj 
+            if self.waypoint_available and len(self.x_ref) > self.n_mpc_nodes :                
+                waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
+                x_ref    = waypoint_dict['x_ref']
+                y_ref    = waypoint_dict['y_ref']
+                psi_ref = waypoint_dict['psi_ref']
+                vel_ref = waypoint_dict['v_ref']                
+                
+            elif self.waypoint_available and len(self.x_ref) <= self.n_mpc_nodes :
+                x_ref   = self.x_ref
+                y_ref   = self.y_ref
+                psi_ref = self.psi_ref
+                vel_ref = self.vel_ref
+            self.waypoint_visualize(x_ref,y_ref,psi_ref)
         except AttributeError:
             rospy.loginfo("mpc_node......set_state fail")
             return
@@ -278,7 +336,7 @@ class GPMPCWrapper:
             skipped_messages = int(msg.header.seq - self.last_odom_seq_number - 1)                       
             if skipped_messages > 1:
                 # Run MPC now
-                self.run_mpc(msg)
+                self.run_mpc(msg,x_ref,y_ref,psi_ref,vel_ref)
                 self.last_odom_seq_number = msg.header.seq
                 self.optimize_next = False
                 return
@@ -286,7 +344,7 @@ class GPMPCWrapper:
             return
 
         def _thread_func():
-            self.run_mpc(msg)            
+            self.run_mpc(msg,x_ref,y_ref,psi_ref,vel_ref)            
         self.mpc_thread = threading.Thread(target=_thread_func(), args=(), daemon=True)
         self.mpc_thread.start()
         self.last_odom_seq_number = msg.header.seq

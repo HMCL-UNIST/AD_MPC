@@ -325,7 +325,7 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     if (new_time_steps) {
         sim_car_acados_update_time_steps(capsule, N, new_time_steps);
     } else {// all time_steps are identical
-        double time_step = 0.1;
+        double time_step = 0.2;
         for (int i = 0; i < N; i++)
         {
             ocp_nlp_in_set(nlp_config, nlp_dims, nlp_in, i, "Ts", &time_step);
@@ -348,7 +348,7 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     // change only the non-zero elements:
     W_0[0+(NY0) * 0] = 1;
     W_0[1+(NY0) * 1] = 1;
-    W_0[2+(NY0) * 2] = 1;
+    W_0[2+(NY0) * 2] = 10;
     W_0[3+(NY0) * 3] = 10;
     W_0[4+(NY0) * 4] = 10;
     W_0[5+(NY0) * 5] = 100;
@@ -367,7 +367,7 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     
     W[0+(NY) * 0] = 1;
     W[1+(NY) * 1] = 1;
-    W[2+(NY) * 2] = 1;
+    W[2+(NY) * 2] = 10;
     W[3+(NY) * 3] = 10;
     W[4+(NY) * 4] = 10;
     W[5+(NY) * 5] = 100;
