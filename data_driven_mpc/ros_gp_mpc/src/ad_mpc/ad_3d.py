@@ -34,7 +34,7 @@ class AD3D:
         
         # System state space
         self.pos = np.zeros((2,))
-        self.psi = np.zeros((1,0))
+        self.psi = np.zeros((1,))
         self.vel = np.zeros((1,))        
         
         # Input constraints        
@@ -58,10 +58,7 @@ class AD3D:
     def set_state(self, *args, **kwargs):
         if len(args) != 0:
             assert len(args) == 1 and len(args[0]) == 4
-            self.pos[0], self.pos[1], \
-            self.psi[0], \
-            self.vel[0] \
-                 = args[0]
+            self.pos[0], self.pos[1], self.psi[0], self.vel[0] = args[0]            
         else:
             self.pos = kwargs["pos"]
             self.psi = kwargs["psi"]

@@ -264,18 +264,26 @@ class AD3DOptimizer:
         second is a Nx1 array referring to the yaw, one Nx1 arrays for the speed.
         :param u_target: Nx2-dimensional target control input vector (u1, u2)
         """
-        if u_target is not None:
-            assert x_target[0].shape[0] == (u_target.shape[0] + 1) or x_target[0].shape[0] == u_target.shape[0]
+        ##########################################################################################
+        # if u_target is not None:
+        #     assert x_target[0].shape[0] == (u_target.shape[0] + 1) or x_target[0].shape[0] == u_target.shape[0]
 
-        # If not enough states in target sequence, append last state until required length is met
-        while x_target[0].shape[0] < self.N + 1:
-            x_target = [np.concatenate((x, np.expand_dims(x[-1, :], 0)), 0) for x in x_target]
-            if u_target is not None:
-                u_target = np.concatenate((u_target, np.expand_dims(u_target[-1, :], 0)), 0)
+        # # If not enough states in target sequence, append last state until required length is met
+        while x_target.shape[0] < self.N + 1:
+            x_target = np.vstack((x_target,x_target[-1,:]))
+            u_target = np.vstack((u_target,u_target[-1,:]))
+            
+            # x_target = [np.concatenate(x_target, x_target[-1,:], 0) for x in x_target]
+            # if u_target is not None:
+            #     u_target = np.concatenate((u_target, np.expand_dims(u_target[-1, :], 0)), 0)
 
-        stacked_x_target = np.concatenate([x for x in x_target], 1)
+        # stacked_x_target = np.concatenate([x for x in x_target], 1)
+        ##########################################################################################
         gp_ind = 0
+        
         self.target = copy(x_target)
+        
+        stacked_x_target = x_target 
 
         for j in range(self.N):
             ref = stacked_x_target[j, :]
@@ -299,11 +307,12 @@ class AD3DOptimizer:
         """
 
         if initial_state is None:
-            initial_state = [0, 0, 1e-4, 1e-4]
+            initial_state = [0.0, 0.0] + [0.0]+ [0.0]
 
         # Set initial state. Add gp state if needed
         x_init = initial_state
         x_init = np.stack(x_init)
+        x_init = x_init.squeeze()
 
         # Set initial condition, equality constraint
         self.acados_ocp_solver[use_model].set(0, 'lbx', x_init)

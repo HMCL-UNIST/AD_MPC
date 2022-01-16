@@ -92,10 +92,10 @@ class ROSGPMPC:
         next_control_with_stamp = AckermannDriveStamped()                
         next_control_with_stamp.header = std_msgs.msg.Header()
         next_control_with_stamp.header.stamp = rospy.Time.now()        
-        next_control_with_stamp.steering_angle = w_opt[1]
+        next_control_with_stamp.drive.steering_angle = w_opt[1]
         # next_control_with_stamp.steering_angle_velocity = 
-        next_control_with_stamp.speed = x_opt[1,3]
-        next_control_with_stamp.acceleration = w_opt[0]        
+        next_control_with_stamp.drive.speed = x_opt[1,3]
+        next_control_with_stamp.drive.acceleration = w_opt[0]        
         # next_control_with_stamp.jerk = 
 
         return next_control_with_stamp, w_opt

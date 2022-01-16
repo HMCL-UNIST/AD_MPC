@@ -97,7 +97,8 @@ class RefTrajectory():
 		# (2) Find error coordinates (aka road-aligned or Frenet frame):
 		xy_waypoint  = self.trajectory[ closest_index, [self.access_map['x'], self.access_map['y']] ]
 		psi_waypoint = self.trajectory[ closest_index, self.access_map['psi'] ]		
-		vel_references = self.trajectory[ :, self.access_map['psi'] ]		
+		vel_references = self.trajectory[ :, self.access_map['vel'] ]		
+		
 		rot_global_to_frenet = np.array([[ np.cos(psi_waypoint), np.sin(psi_waypoint)], \
 			                             [-np.sin(psi_waypoint), np.cos(psi_waypoint)]])
 

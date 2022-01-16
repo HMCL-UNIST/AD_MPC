@@ -85,7 +85,8 @@ class AD3DMPC:
         u_1(m-1), u_2(m-1)]. If return_x is True, will also return a vector of shape N+1 x 4 containing the optimized
         state prediction.
         """
-        ad_current_state = self.ad.get_state(stacked=True)        
+        # ad_current_state = self.ad.get_state(stacked=True)     
+        ad_current_state = np.expand_dims(self.ad.get_state(stacked=True), 0)   
 
         # Remove rate state for simplified model NLP
         out_out = self.ad_opt.run_optimization(ad_current_state, use_model=use_model, return_x=return_x)

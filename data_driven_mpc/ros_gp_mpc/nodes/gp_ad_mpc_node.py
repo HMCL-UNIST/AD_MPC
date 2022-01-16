@@ -49,10 +49,11 @@ class GPMPCWrapper:
         self.opt_dt = self.t_horizon / (self.n_mpc_nodes * self.control_freq_factor)
 #################################################################        
         # Initialize GP MPC for point tracking
-        # self.gp_mpc = ROSGPMPC(self.t_horizon, self.n_mpc_nodes, self.opt_dt)
+        self.gp_mpc = ROSGPMPC(self.t_horizon, self.n_mpc_nodes, self.opt_dt)
 #################################################################
         # Last state obtained from odometry
         self.x = None
+        self.velocity = None
         self.environment = environment
         # Elapsed time between two recordings
         self.last_update_time = time.time()
@@ -60,7 +61,7 @@ class GPMPCWrapper:
         # Last references. Use hovering activation as input reference
         self.last_x_ref = None
         self.last_u_ref = None
-
+    
         # Reference trajectory variables
         self.x_ref = None
         self.t_ref = None
@@ -103,7 +104,7 @@ class GPMPCWrapper:
             control_topic = "/hmcl_ctrl_cmd"            
             waypoint_topic = "/final_waypoints"
         
-        status_topic = "is_mpc_busy"
+        status_topic = "/is_mpc_busy"
         # Publishers
         self.control_pub = rospy.Publisher(control_topic, AckermannDrive, queue_size=1, tcp_nodelay=True)
         self.ref_puf_publisher = rospy.Publisher("/mpc_ref_trajectory", MarkerArray, queue_size=1)
@@ -138,7 +139,26 @@ class GPMPCWrapper:
         dt = odom.header.stamp.to_time() - self.last_update_time
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
-        model_data = self.gp_mpc.set_reference(self.x_ref, self.y_ref,self.psi_ref,self.vel_ref)
+        ref = np.zeros([4,len(self.x_ref)])
+        ref[0] = self.x_ref
+        ref[1] = self.y_ref
+        ref[2] = self.psi_ref
+        ref[3] = self.vel_ref
+        ref = ref.transpose()
+
+        
+
+        # pose = np.array([self.x_ref,self.y_ref])
+        # psi = np.array(self.psi_ref)
+        # if self.velocity is None:
+        #     return
+        # vel = np.array(self.vel_ref)
+        # ref = [pose,psi,vel]
+        
+        # ref_ = np.array([self.x_ref, self.y_ref, self.psi_ref, self.vel_ref])
+        
+        u_ref = np.zeros((len(self.x_ref)-1,2))
+        model_data = self.gp_mpc.set_reference(ref,u_ref)
     
         # Run MPC and publish control
         try:
@@ -196,8 +216,7 @@ class GPMPCWrapper:
     def waypoint_callback(self, msg):
         """
         :type msg: autoware_msgs/Lane 
-        """        
-        
+        """                
         if not self.waypoint_available:
             self.waypoint_available = True
             
@@ -210,7 +229,7 @@ class GPMPCWrapper:
             self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
             
             # resample trajectory with respect to vel_ref 
-            if self.traj_resample_vel:                        
+            if self.traj_resample_vel and len(self.x_ref) > 3:                        
                 self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
                 waypoint_dict = self.ref_gen.get_waypoints(self.x_ref[0], self.y_ref[0], self.psi_ref[0])
                 self.x_ref = waypoint_dict['x_ref']
@@ -221,7 +240,7 @@ class GPMPCWrapper:
             self.waypoint_visualize()
         else:
             rospy.loginfo("Waypoints are empty")        
-        rospy.loginfo("New waypoints received")
+        
         
   
     def pose_callback(self, msg):
@@ -236,6 +255,8 @@ class GPMPCWrapper:
         
         pose = [msg.pose.position.x, msg.pose.position.y]
         psi = [self.cur_yaw]
+        if self.velocity is None:
+            return
         vel = [self.velocity]
         self.x = pose+psi+vel
         
@@ -248,29 +269,29 @@ class GPMPCWrapper:
 
         if self.pose_available is False:
             self.pose_available = True        
-####################################################################################
-        # # We only optimize once every two odometry messages
-        # if not self.optimize_next:
-        #     self.mpc_thread.join()
-        #     # Count how many messages were skipped (ideally 0)
-        #     skipped_messages = int(msg.header.seq - self.last_odom_seq_number - 1)                       
-        #     if skipped_messages > 1:
-        #         # Run MPC now
-        #         self.run_mpc(msg)
-        #         self.last_odom_seq_number = msg.header.seq
-        #         self.optimize_next = False
-        #         return
-        #     self.optimize_next = True            
-        #     return
+###################################################################################
+        # We only optimize once every two odometry messages
+        if not self.optimize_next:
+            self.mpc_thread.join()
+            # Count how many messages were skipped (ideally 0)
+            skipped_messages = int(msg.header.seq - self.last_odom_seq_number - 1)                       
+            if skipped_messages > 1:
+                # Run MPC now
+                self.run_mpc(msg)
+                self.last_odom_seq_number = msg.header.seq
+                self.optimize_next = False
+                return
+            self.optimize_next = True            
+            return
 
-        # def _thread_func():
-        #     self.run_mpc(msg)            
-        # self.mpc_thread = threading.Thread(target=_thread_func(), args=(), daemon=True)
-        # self.mpc_thread.start()
-        # self.last_odom_seq_number = msg.header.seq
-        # self.optimize_next = False
-        # # rospy.loginfo("pose subscribed")
-####################################################################################
+        def _thread_func():
+            self.run_mpc(msg)            
+        self.mpc_thread = threading.Thread(target=_thread_func(), args=(), daemon=True)
+        self.mpc_thread.start()
+        self.last_odom_seq_number = msg.header.seq
+        self.optimize_next = False
+        # rospy.loginfo("pose subscribed")
+###################################################################################
 
 def main():
     rospy.init_node("gp_mpc")
