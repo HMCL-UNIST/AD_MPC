@@ -309,19 +309,22 @@ class GPMPCWrapper:
             # Update the state estimate of the quad
             self.gp_mpc.set_state(self.x)
             # reset the reference traj 
-            if self.waypoint_available and len(self.x_ref) > self.n_mpc_nodes :                
+            if not self.waypoint_available:
+                return
+            if len(self.x_ref) > self.n_mpc_nodes :                
                 waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
                 x_ref    = waypoint_dict['x_ref']
                 y_ref    = waypoint_dict['y_ref']
                 psi_ref = waypoint_dict['psi_ref']
                 vel_ref = waypoint_dict['v_ref']                
                 
-            elif self.waypoint_available and len(self.x_ref) <= self.n_mpc_nodes :
+            elif len(self.x_ref) <= self.n_mpc_nodes :
                 x_ref   = self.x_ref
                 y_ref   = self.y_ref
                 psi_ref = self.psi_ref
-                vel_ref = self.vel_ref
+                vel_ref = self.vel_ref            
             self.waypoint_visualize(x_ref,y_ref,psi_ref)
+            
         except AttributeError:
             rospy.loginfo("mpc_node......set_state fail")
             return
