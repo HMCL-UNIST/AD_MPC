@@ -32,7 +32,7 @@ from utils.visualization import trajectory_tracking_results, mse_tracking_experi
 from experiments.point_tracking_and_record import make_record_dict, get_record_file_and_dir, check_out_data
 from model_fitting.rdrv_fitting import load_rdrv
 
-from utils.utils import quaternion_to_euler, skew_symmetric, v_dot_q, unit_quat, quaternion_inverse, wrap_to_pi, euler_to_quaternion
+from utils.utils import quaternion_to_euler, skew_symmetric, v_dot_q, unit_quat, quaternion_inverse, wrap_to_pi, euler_to_quaternion, bound_angle_within_pi
 from ad_mpc.ref_traj import RefTrajectory
 
 from visualization_msgs.msg import MarkerArray, Marker
@@ -261,13 +261,13 @@ class GPMPCWrapper:
         if not self.waypoint_available:
             self.waypoint_available = True
         
-        if len(msg.waypoints) > 2:                         
+        if len(msg.waypoints) > 0:                         
             # received messages             
             # msg.waypoints = msg.waypoints[0:]
             self.x_ref = [msg.waypoints[i].pose.pose.position.x for i in range(len(msg.waypoints))]
-            self.y_ref = [msg.waypoints[i].pose.pose.position.y for i in range(len(msg.waypoints))]            
+            self.y_ref = [msg.waypoints[i].pose.pose.position.y for i in range(len(msg.waypoints))]                        
             quat_to_euler_lambda = lambda o: quaternion_to_euler([o[0], o[1], o[2], o[3]])            
-            self.psi_ref = [quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2] for i in range(len(msg.waypoints))]            
+            self.psi_ref = [wrap_to_pi(quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2]) for i in range(len(msg.waypoints))]                                    
             self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
             # self.final_waypoint_visualize()
             # resample trajectory with respect to vel_ref 
@@ -316,13 +316,15 @@ class GPMPCWrapper:
                 x_ref    = waypoint_dict['x_ref']
                 y_ref    = waypoint_dict['y_ref']
                 psi_ref = waypoint_dict['psi_ref']
-                vel_ref = waypoint_dict['v_ref']                
+                vel_ref = waypoint_dict['v_ref'] 
+                
                 
             elif len(self.x_ref) <= self.n_mpc_nodes :
                 x_ref   = self.x_ref
                 y_ref   = self.y_ref
                 psi_ref = self.psi_ref
-                vel_ref = self.vel_ref            
+                vel_ref = self.vel_ref        
+                
             self.waypoint_visualize(x_ref,y_ref,psi_ref)
             
         except AttributeError:
@@ -333,23 +335,29 @@ class GPMPCWrapper:
             self.pose_available = True        
 ###################################################################################
         # We only optimize once every two odometry messages
-        if not self.optimize_next:
-            self.mpc_thread.join()
-            # Count how many messages were skipped (ideally 0)
-            skipped_messages = int(msg.header.seq - self.last_odom_seq_number - 1)                       
-            if skipped_messages > 1:
-                # Run MPC now
-                self.run_mpc(msg,x_ref,y_ref,psi_ref,vel_ref)
-                self.last_odom_seq_number = msg.header.seq
-                self.optimize_next = False
-                return
-            self.optimize_next = True            
-            return
+        # if not self.optimize_next:
+        #     self.mpc_thread.join()
+        #     # Count how many messages were skipped (ideally 0)
+        #     skipped_messages = int(msg.header.seq - self.last_odom_seq_number - 1)                       
+        #     if skipped_messages > 1:
+        #         # Run MPC now
+        #         self.run_mpc(msg,x_ref,y_ref,psi_ref,vel_ref)
+        #         self.last_odom_seq_number = msg.header.seq
+        #         self.optimize_next = False
+        #         return
+        #     self.optimize_next = True            
+        #     return
+        
+        
+        
+            
+            
 
         def _thread_func():
             self.run_mpc(msg,x_ref,y_ref,psi_ref,vel_ref)            
         self.mpc_thread = threading.Thread(target=_thread_func(), args=(), daemon=True)
         self.mpc_thread.start()
+        self.mpc_thread.join()
         self.last_odom_seq_number = msg.header.seq
         self.optimize_next = False
         # rospy.loginfo("pose subscribed")

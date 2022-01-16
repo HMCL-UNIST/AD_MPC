@@ -40,10 +40,10 @@ class AD3D:
         # Input constraints        
         self.steering_min = -0.52
         self.steering_max = 0.52
-        self.acc_min = -20
-        self.acc_max = 20
-        self.L_R = 1.57
-        self.L_F = 1.56
+        self.acc_min = -10
+        self.acc_max = 2
+        self.L_R = 1.4
+        self.L_F = 1.4
 
         self.noisy_input = False
         self.noisy = noisy

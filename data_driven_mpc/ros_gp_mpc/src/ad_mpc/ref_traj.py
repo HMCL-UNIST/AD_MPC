@@ -19,7 +19,8 @@ def compute_curvature(cdists, psis):
 	if len(curv_raw) > 33:
 		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw) # curvature filter suggested by Jinkkwon Kim.
 	else:
-		curv_filt = curv_raw
+		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=3)
+		print("pad ing 3@!!!!!!!!!!!!!!")
 	# Curvature Filtering: (https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html)
 	
 	return curv_filt
@@ -90,7 +91,7 @@ class RefTrajectory():
 		if self.access_map is None:
 			rospy.loginfo("trajectory has not been set")
 			return
-		psi_init = bound_angle_within_pi(psi_init)
+		# psi_init = bound_angle_within_pi(psi_init)
 
 		waypoint_dict = {}
 		xy_traj = self.trajectory[ :, [self.access_map['x'], self.access_map['y']] ] # XY trajectory
@@ -124,7 +125,7 @@ class RefTrajectory():
 		start_dist = self.trajectory[closest_index, self.access_map['cdist']]			
 		interp_by_key = 'cdist'
 		while len(vel_references) < self.traj_horizon+1:
-			vel_references = np.concatenate((vel_references, [0.0001]))
+			vel_references = np.concatenate((vel_references, [0.01]))
 		interp_to_fit = [h*self.traj_dt*vel_references[h] + start_dist for h in range(1, self.traj_horizon+1)]
 		
 		for waypoint_key in ['x', 'y', 'psi', 'cdist', 'curv']:
