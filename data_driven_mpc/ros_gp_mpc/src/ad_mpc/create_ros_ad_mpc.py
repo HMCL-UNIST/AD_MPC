@@ -55,7 +55,7 @@ class ROSGPMPC:
                 "terminal_cost": False
             }
 
-        q_diagonal = np.array([1.0, 1.0, 10.0, 0.0])
+        q_diagonal = np.array([1.0, 1.0, 1.0, 10.0])
         r_diagonal = np.array([10.0, 100.0])        
 
         ad_mpc = AD3DMPC(ad, t_horizon=t_horizon, optimization_dt=opt_dt, n_nodes=n_mpc_nodes, 
@@ -94,7 +94,8 @@ class ROSGPMPC:
         next_control_with_stamp.header.stamp = rospy.Time.now()        
         next_control_with_stamp.drive.steering_angle = w_opt[1]
         # next_control_with_stamp.steering_angle_velocity = 
-        next_control_with_stamp.drive.speed = x_opt[1,3]
+        next_control_with_stamp.drive.speed = x_opt[2,3]        
+        print(x_opt[:,3])
         next_control_with_stamp.drive.acceleration = w_opt[0]        
         # next_control_with_stamp.jerk = 
 
