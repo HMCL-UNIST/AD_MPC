@@ -19,8 +19,7 @@ def compute_curvature(cdists, psis):
 	if len(curv_raw) > 33:
 		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw) # curvature filter suggested by Jinkkwon Kim.
 	else:
-		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=3)
-		print("pad ing 3@!!!!!!!!!!!!!!")
+		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=3)		
 	# Curvature Filtering: (https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html)
 	
 	return curv_filt
@@ -91,7 +90,7 @@ class RefTrajectory():
 		if self.access_map is None:
 			rospy.loginfo("trajectory has not been set")
 			return
-		# psi_init = bound_angle_within_pi(psi_init)
+		psi_init = bound_angle_within_pi(psi_init)
 
 		waypoint_dict = {}
 		xy_traj = self.trajectory[ :, [self.access_map['x'], self.access_map['y']] ] # XY trajectory
@@ -129,11 +128,17 @@ class RefTrajectory():
 		interp_to_fit = [h*self.traj_dt*vel_references[h] + start_dist for h in range(1, self.traj_horizon+1)]
 		
 		for waypoint_key in ['x', 'y', 'psi', 'cdist', 'curv']:
-			waypoint_dict[waypoint_key + '_ref'] = np.interp(interp_to_fit, \
+			if waypoint_key == 'psi':
+				waypoint_dict[waypoint_key + '_ref'] = np.interp(interp_to_fit, \
 				                                    self.trajectory[:, self.access_map[interp_by_key]], \
-				                                    self.trajectory[:, self.access_map[waypoint_key]])
+				                                    np.unwrap(self.trajectory[:, self.access_map[waypoint_key]]))
+			else:				
+				waypoint_dict[waypoint_key + '_ref'] = np.interp(interp_to_fit, \
+														self.trajectory[:, self.access_map[interp_by_key]], \
+														self.trajectory[:, self.access_map[waypoint_key]])
 			if waypoint_key == 'psi':
 				waypoint_dict['psi_ref'] = fix_angle_reference(waypoint_dict['psi_ref'], psi_init)
+				waypoint_dict['psi_ref'] = bound_angle_within_pi(waypoint_dict['psi_ref'])
 
 		# Reference velocity found by approximation using ds/dt finite differencing.
 		waypoint_dict['v_ref'] = np.diff(waypoint_dict['cdist_ref']) / self.traj_dt
