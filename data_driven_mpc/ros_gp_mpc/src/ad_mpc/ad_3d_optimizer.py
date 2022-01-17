@@ -287,7 +287,7 @@ class AD3DOptimizer:
         # np.place(tmp,tmp < -3, tmp+2*np.pi)
         # x_target[:,2] = tmp
         self.target = copy(x_target)       
-        print(x_target)        
+        # print(x_target)        
         stacked_x_target = x_target 
         
         
