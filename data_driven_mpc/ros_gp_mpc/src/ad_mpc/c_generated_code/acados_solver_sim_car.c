@@ -346,10 +346,10 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
 
     double* W_0 = calloc(NY0*NY0, sizeof(double));
     // change only the non-zero elements:
-    W_0[0+(NY0) * 0] = 0.1;
-    W_0[1+(NY0) * 1] = 0.1;
+    W_0[0+(NY0) * 0] = 1;
+    W_0[1+(NY0) * 1] = 1;
     W_0[2+(NY0) * 2] = 10;
-    W_0[3+(NY0) * 3] = 50;
+    W_0[3+(NY0) * 3] = 10;
     W_0[4+(NY0) * 4] = 10;
     W_0[5+(NY0) * 5] = 20;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, 0, "W", W_0);
@@ -365,10 +365,10 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     double* W = calloc(NY*NY, sizeof(double));
     // change only the non-zero elements:
     
-    W[0+(NY) * 0] = 0.1;
-    W[1+(NY) * 1] = 0.1;
+    W[0+(NY) * 0] = 1;
+    W[1+(NY) * 1] = 1;
     W[2+(NY) * 2] = 10;
-    W[3+(NY) * 3] = 50;
+    W[3+(NY) * 3] = 10;
     W[4+(NY) * 4] = 10;
     W[5+(NY) * 5] = 20;
 

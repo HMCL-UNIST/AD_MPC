@@ -42,7 +42,7 @@ class GPMPCWrapper:
     def __init__(self,environment="carla"):
 
         # Control at 50 (sim) or 60 (real) hz. Use time horizon=1 and 10 nodes
-        self.n_mpc_nodes = rospy.get_param('~n_nodes', default=10.0)
+        self.n_mpc_nodes = rospy.get_param('~n_nodes', default=20.0)
         self.t_horizon = rospy.get_param('~t_horizon', default=2.0)
         self.traj_resample_vel = rospy.get_param('~traj_resample_vel', default=True)        
         self.control_freq_factor = rospy.get_param('~control_freq_factor', default=5 if environment == "carla" else 6)
@@ -111,6 +111,7 @@ class GPMPCWrapper:
         # Publishers
         self.control_pub = rospy.Publisher(control_topic, AckermannDrive, queue_size=1, tcp_nodelay=True)
         self.ref_puf_publisher = rospy.Publisher("/mpc_ref_trajectory", MarkerArray, queue_size=1)
+        self.mpc_predicted_trj_publisher = rospy.Publisher("/mpc_pred_trajectory", MarkerArray, queue_size=1)
         self.final_ref_publisher = rospy.Publisher("/final_trajectory", MarkerArray, queue_size=1)
         # Subscribers
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_callback)
@@ -174,7 +175,11 @@ class GPMPCWrapper:
         # Run MPC and publish control
         try:
             tic = time.time()
-            next_control, w_opt = self.gp_mpc.optimize(model_data)
+            next_control, w_opt, x_opt = self.gp_mpc.optimize(model_data)
+            ####################################
+            if x_opt is not None:
+                self.predicted_trj_visualize(x_opt)
+            ####################################
             self.optimization_dt += time.time() - tic
             print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
@@ -196,6 +201,31 @@ class GPMPCWrapper:
         self.velocity = msg.velocity
         if self.vehicle_status_available is False:
             self.vehicle_status_available = True        
+
+    def predicted_trj_visualize(self,predicted_state):
+        
+        marker_refs = MarkerArray() 
+        for i in range(len(predicted_state[:,0])):
+            marker_ref = Marker()
+            marker_ref.header.frame_id = "map"  
+            marker_ref.ns = "mpc_ref"+str(i)
+            marker_ref.id = i
+            marker_ref.type = Marker.ARROW
+            marker_ref.action = Marker.ADD                
+            marker_ref.pose.position.x = predicted_state[i,0] 
+            marker_ref.pose.position.y = predicted_state[i,1]              
+            quat_tmp = euler_to_quaternion(0.0, 0.0, predicted_state[i,2])     
+            quat_tmp = unit_quat(quat_tmp)                 
+            marker_ref.pose.orientation.w = quat_tmp[0]
+            marker_ref.pose.orientation.x = quat_tmp[1]
+            marker_ref.pose.orientation.y = quat_tmp[2]
+            marker_ref.pose.orientation.z = quat_tmp[3]
+            marker_ref.color.r, marker_ref.color.g, marker_ref.color.b = (255, 255, 0)
+            marker_ref.color.a = 0.5
+            marker_ref.scale.x, marker_ref.scale.y, marker_ref.scale.z = (0.6, 0.4, 0.3)
+            marker_refs.markers.append(marker_ref)
+            i+=1
+        self.mpc_predicted_trj_publisher.publish(marker_refs)
         
     def waypoint_visualize(self,x_ref,y_ref,psi_ref):
         

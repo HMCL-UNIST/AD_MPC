@@ -20,7 +20,7 @@ from utils.utils import make_bx_matrix
 
 
 class AD3DMPC:
-    def __init__(self, my_ad, t_horizon=1.0, n_nodes=5, q_cost=None, r_cost=None,
+    def __init__(self, my_ad, t_horizon=1.0, n_nodes=20, q_cost=None, r_cost=None,
                  optimization_dt=5e-2, simulation_dt=5e-4, model_name="my_ad", solver_options=None):    
         """
         :param my_ad: AD 2D simulator object

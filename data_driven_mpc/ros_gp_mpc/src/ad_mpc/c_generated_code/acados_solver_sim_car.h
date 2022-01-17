@@ -61,7 +61,7 @@
 #define SIM_CAR_NY0    6
 #define SIM_CAR_NY     6
 #define SIM_CAR_NYN    4
-#define SIM_CAR_N      30
+#define SIM_CAR_N      20
 #define SIM_CAR_NH     0
 #define SIM_CAR_NPHI   0
 #define SIM_CAR_NHN    0

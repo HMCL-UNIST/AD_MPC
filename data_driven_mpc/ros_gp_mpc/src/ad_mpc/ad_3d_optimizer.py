@@ -39,7 +39,7 @@ class AD3DOptimizer:
 
         # Weighted squared error loss function q = (p_xyz, a_xyz, v_xyz, r_xyz), r = (u1, u2, u3, u4)
         if q_cost is None:
-            q_cost = np.array([1.0, 1.0, 10., 0.0])
+            q_cost = np.array([1.0, 1.0, 10., 5.0])
         if r_cost is None:
             r_cost = np.array([10.0, 100.0])             
 
@@ -59,7 +59,7 @@ class AD3DOptimizer:
         self.s = cs.MX.sym('s', 1)  # psi 
         self.v = cs.MX.sym('v', 1)  # velocity        
 
-        # Full state vector (13-dimensional)
+        # Full state vector (4-dimensional)
         self.x = cs.vertcat(self.p, self.s, self.v)
         self.state_dim = 4
 
@@ -245,8 +245,10 @@ class AD3DOptimizer:
         """
         if x_target is None:
             x_target = [[0, 0, 0, 0]]
+            return
         if u_target is None:
             u_target = [0, 0]
+            return
         # Set new target state
         self.target = copy(x_target)
         gp_ind = 0
@@ -270,7 +272,7 @@ class AD3DOptimizer:
         #     assert x_target[0].shape[0] == (u_target.shape[0] + 1) or x_target[0].shape[0] == u_target.shape[0]
 
         # # If not enough states in target sequence, append last state until required length is met
-        while x_target.shape[0] < self.N + 1:
+        while x_target.shape[0] < self.N+1:
             x_target = np.vstack((x_target,x_target[-1,:]))
             u_target = np.vstack((u_target,u_target[-1,:]))
             
@@ -281,11 +283,14 @@ class AD3DOptimizer:
         # stacked_x_target = np.concatenate([x for x in x_target], 1)
         ##########################################################################################
         gp_ind = 0
-        
-        self.target = copy(x_target)
-        
+        # tmp = x_target[:,2] 
+        # np.place(tmp,tmp < -3, tmp+2*np.pi)
+        # x_target[:,2] = tmp
+        self.target = copy(x_target)       
+        print(x_target)        
         stacked_x_target = x_target 
-
+        
+        
         for j in range(self.N):
             ref = stacked_x_target[j, :]
             ref = np.concatenate((ref, u_target[j, :]))
