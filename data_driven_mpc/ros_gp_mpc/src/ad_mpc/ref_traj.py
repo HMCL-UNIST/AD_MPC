@@ -125,7 +125,11 @@ class RefTrajectory():
 		interp_by_key = 'cdist'
 		while len(vel_references) < self.traj_horizon+1:
 			vel_references = np.concatenate((vel_references, [0.01]))
-		interp_to_fit = [h*self.traj_dt*vel_references[h] + start_dist for h in range(1, self.traj_horizon+1)]
+		
+		interp_to_fit = [self.traj_dt*vel_references[0]]
+		for h in range(1,self.traj_horizon):
+			interp_to_fit.append(interp_to_fit[-1]+self.traj_dt*vel_references[h])
+		# interp_to_fit = [h*self.traj_dt*vel_references[h] + start_dist for h in range(1, self.traj_horizon+1)]
 		
 		for waypoint_key in ['x', 'y', 'psi', 'cdist', 'curv']:
 			if waypoint_key == 'psi':

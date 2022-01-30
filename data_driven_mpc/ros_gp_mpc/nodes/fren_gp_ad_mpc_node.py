@@ -331,12 +331,16 @@ class GPMPCWrapper:
         pose = [msg.pose.position.x, msg.pose.position.y]        
         psi = [self.cur_yaw]
 
-        waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
+        
 
         if self.velocity is None:
             return
+        if not self.waypoint_available:
+            return
+
         vel = [self.velocity]    
         # self.x = pose+psi+vel        
+        waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
         s0 = [waypoint_dict['s0']]
         e_y = [waypoint_dict['e_y0']]
         e_psi = [waypoint_dict['e_psi0']]
@@ -351,15 +355,17 @@ class GPMPCWrapper:
                 return
             
             
-            if len(self.x_ref) > self.n_mpc_nodes :   
-                x_ref    = waypoint_dict['x_ref']
-                y_ref    = waypoint_dict['y_ref']
-                psi_ref = waypoint_dict['psi_ref']
-                vel_ref = waypoint_dict['v_ref']  
-                curv_ref = waypoint_dict['curv_ref']    
-                cdist_ref = waypoint_dict['cdist_ref']                                               
-            else:
-                rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
+            
+            # if len(self.x_ref) > self.n_mpc_nodes :   
+            x_ref    = waypoint_dict['x_ref']
+            y_ref    = waypoint_dict['y_ref']
+            psi_ref = waypoint_dict['psi_ref']
+            vel_ref = waypoint_dict['v_ref']  
+            curv_ref = waypoint_dict['curv_ref']    
+            cdist_ref = waypoint_dict['cdist_ref']                                               
+            # else:
+            #     rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
+
             # elif len(self.x_ref) <= self.n_mpc_nodes :
             #     x_ref   = self.x_ref
             #     y_ref   = self.y_ref

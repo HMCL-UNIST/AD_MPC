@@ -49,8 +49,8 @@ class Fren_AD3DOptimizer:
 
 
         self.ad = ad
-        s_init = [1,2,3,4,5]
-        self.curv_ref = [0,0,0,0,0]
+        s_init = [0,1,2,3,4]
+        self.curv_ref = [1e-6,1e-6,1e-6,1e-6,1e-6]
         self.kapparef_s = interpolant("kapparef_s", "bspline", [s_init], self.curv_ref) 
         
     
