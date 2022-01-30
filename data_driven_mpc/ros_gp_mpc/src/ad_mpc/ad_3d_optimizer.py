@@ -219,7 +219,7 @@ class AD3DOptimizer:
         Symbolic dynamics of the 2D AD model. The state consists on: [p_xy, psi, speed]^T.
         The input of the system is: [u_1, u_2], i.e. acceleration & delta(steering angle)
 
-        :return: CasADi function that computes the analytical differential state dynamics of the quadrotor model.
+        :return: CasADi function that computes the analytical differential state dynamics of the AD  model.
         Inputs: 'x' state of AD (4x1) and 'u' control input (2x1). Output: differential state vector 'x_dot'
         (4x1)
         """

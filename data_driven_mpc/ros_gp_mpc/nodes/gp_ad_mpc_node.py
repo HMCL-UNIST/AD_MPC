@@ -95,7 +95,7 @@ class GPMPCWrapper:
         # Setup node publishers and subscribers. The odometry (sub) and control (pub) topics will vary depending on
         # Assume Carla simulation environment         
         if self.environment == "carla":            
-            # pose_topic = "/ndt_pose"
+            # pose_topic = "/state_estimator/estimated_pose"
             pose_topic = "/current_pose"            
             vehicle_status_topic = "/carla/ego_vehicle/vehicle_status"
             control_topic = "/carla/ego_vehicle/ackermann_cmd"            
