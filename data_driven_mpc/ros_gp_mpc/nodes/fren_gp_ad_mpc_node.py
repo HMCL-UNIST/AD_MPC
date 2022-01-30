@@ -24,8 +24,8 @@ from geometry_msgs.msg import PoseStamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
 from autoware_msgs.msg import Lane, Waypoint
 from carla_msgs.msg import CarlaEgoVehicleStatus
-from ad_mpc.create_ros_ad_mpc import ROSGPMPC
 
+from ad_mpc.fren_create_ros_ad_mpc import Fren_ROSGPMPC
 from utils.utils import jsonify, interpol_mse, quaternion_state_mse, load_pickled_models, v_dot_q, \
     separate_variables
 from utils.visualization import trajectory_tracking_results, mse_tracking_experiment_plot, \
@@ -51,7 +51,7 @@ class GPMPCWrapper:
         self.opt_dt = self.t_horizon / (self.n_mpc_nodes * self.control_freq_factor)
 #################################################################        
         # Initialize GP MPC for point tracking
-        self.gp_mpc = ROSGPMPC(self.t_horizon, self.n_mpc_nodes, self.opt_dt)
+        self.gp_mpc = Fren_ROSGPMPC(self.t_horizon, self.n_mpc_nodes, self.opt_dt)
 #################################################################
         # Last state obtained from odometry
         self.x = None
@@ -131,7 +131,7 @@ class GPMPCWrapper:
 
  
     
-    def run_mpc(self, odom, x_ref,y_ref,psi_ref,vel_ref, recording=True):
+    def run_mpc(self, odom, cdist_ref, vel_ref, curv_ref, recording=True):
         """
         :param odom: message from subscriber.
         :type odom: Odometry
@@ -146,18 +146,15 @@ class GPMPCWrapper:
         dt = odom.header.stamp.to_time() - self.last_update_time
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
-        if self.end_of_goal or len(self.x_ref) < self.n_mpc_nodes:
-            ref = [x_ref[-1], y_ref[-1], psi_ref[-1], 0.0]
+        if self.end_of_goal or len(vel_ref) < self.n_mpc_nodes:
+            ref = [0, 0, 0, 0]                
             u_ref = [0.0, 0.0]   
             terminal_point = True               
         else:        
-            ref = np.zeros([4,len(x_ref)])
-            ref[0] = x_ref
-            ref[1] = y_ref
-            ref[2] = psi_ref
+            ref = np.zeros([4,len(vel_ref)])
             ref[3] = vel_ref
             ref = ref.transpose()
-            u_ref = np.zeros((len(x_ref)-1,2))
+            u_ref = np.zeros((len(vel_ref)-1,2))
             terminal_point = False
             
         
@@ -172,7 +169,7 @@ class GPMPCWrapper:
         # ref_ = np.array([self.x_ref, self.y_ref, self.psi_ref, self.vel_ref])
         
         
-        model_data = self.gp_mpc.set_reference(ref,u_ref,terminal_point)
+        model_data = self.gp_mpc.set_reference(ref,u_ref,curv_ref,cdist_ref,terminal_point)
     
         # Run MPC and publish control
         try:
@@ -341,9 +338,10 @@ class GPMPCWrapper:
         vel = [self.velocity]    
         # self.x = pose+psi+vel        
         s0 = [waypoint_dict['s0']]
-        e_y_psi = [waypoint_dict['e_y0'], waypoint_dict['e_psi0']]
-        vel = self.velocity
-        self.x = s0+e_y_psi+vel
+        e_y = [waypoint_dict['e_y0']]
+        e_psi = [waypoint_dict['e_psi0']]
+        vel = [self.velocity]
+        self.x = s0+e_y+e_psi+vel
 
         try:
             # Update the state estimate of the AD
@@ -358,7 +356,8 @@ class GPMPCWrapper:
                 y_ref    = waypoint_dict['y_ref']
                 psi_ref = waypoint_dict['psi_ref']
                 vel_ref = waypoint_dict['v_ref']  
-                curv_ref = waypoint_dict['curv_ref']                                
+                curv_ref = waypoint_dict['curv_ref']    
+                cdist_ref = waypoint_dict['cdist_ref']                                               
             else:
                 rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
             # elif len(self.x_ref) <= self.n_mpc_nodes :
@@ -393,7 +392,7 @@ class GPMPCWrapper:
                     
 
         def _thread_func():
-            self.run_mpc(msg,x_ref,y_ref,psi_ref,vel_ref,curv_ref)            
+            self.run_mpc(msg,cdist_ref,vel_ref,curv_ref)            
         self.mpc_thread = threading.Thread(target=_thread_func(), args=(), daemon=True)
         self.mpc_thread.start()
         self.mpc_thread.join()

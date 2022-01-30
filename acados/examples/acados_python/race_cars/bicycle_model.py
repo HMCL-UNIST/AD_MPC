@@ -56,7 +56,7 @@ def bicycle_model(track="LMS_Track.txt"):
 
     # compute spline interpolations
     kapparef_s = interpolant("kapparef_s", "bspline", [s0], kapparef)
-
+    
     ## Race car parameters
     m = 0.043
     C1 = 0.5
