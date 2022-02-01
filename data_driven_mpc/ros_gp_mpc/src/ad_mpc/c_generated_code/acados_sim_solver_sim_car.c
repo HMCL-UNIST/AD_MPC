@@ -159,8 +159,8 @@ int sim_car_acados_sim_create(sim_solver_capsule * capsule)
 
     /* initialize input */
     // x
-    double x0[4];
-    for (int ii = 0; ii < 4; ii++)
+    double x0[5];
+    for (int ii = 0; ii < 5; ii++)
         x0[ii] = 0.0;
 
     sim_in_set(sim_car_sim_config, sim_car_sim_dims,
@@ -176,11 +176,11 @@ int sim_car_acados_sim_create(sim_solver_capsule * capsule)
                sim_car_sim_in, "u", u0);
 
     // S_forw
-    double S_forw[24];
-    for (int ii = 0; ii < 24; ii++)
+    double S_forw[35];
+    for (int ii = 0; ii < 35; ii++)
         S_forw[ii] = 0.0;
-    for (int ii = 0; ii < 4; ii++)
-        S_forw[ii + ii * 4 ] = 1.0;
+    for (int ii = 0; ii < 5; ii++)
+        S_forw[ii + ii * 5 ] = 1.0;
 
 
     sim_in_set(sim_car_sim_config, sim_car_sim_dims,

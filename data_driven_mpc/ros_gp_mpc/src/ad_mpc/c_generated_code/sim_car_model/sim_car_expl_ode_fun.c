@@ -219,7 +219,7 @@ static const casadi_int casadi_s0[1] = {0};
 static const casadi_int casadi_s1[1] = {1};
 static const casadi_int casadi_s2[1] = {3};
 static const casadi_int casadi_s3[2] = {0, 9};
-static const casadi_int casadi_s4[8] = {4, 1, 0, 4, 0, 1, 2, 3};
+static const casadi_int casadi_s4[9] = {5, 1, 0, 5, 0, 1, 2, 3, 4};
 static const casadi_int casadi_s5[6] = {2, 1, 0, 2, 0, 1};
 static const casadi_int casadi_s6[3] = {0, 0, 0};
 
@@ -239,7 +239,7 @@ static int casadi_f1(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   return 0;
 }
 
-/* sim_car_expl_ode_fun:(i0[4],i1[2],i2[])->(o0[4]) */
+/* sim_car_expl_ode_fun:(i0[5],i1[2],i2[])->(o0[5]) */
 static int casadi_f0(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {
   casadi_real **res1=res+1;
   const casadi_real **arg1=arg+3;
@@ -250,8 +250,8 @@ static int casadi_f0(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   w1 = arg[0] ? arg[0][2] : 0;
   /* #2: @2 = 0.5 */
   w2 = 5.0000000000000000e-01;
-  /* #3: @3 = input[1][1] */
-  w3 = arg[1] ? arg[1][1] : 0;
+  /* #3: @3 = input[0][4] */
+  w3 = arg[0] ? arg[0][4] : 0;
   /* #4: @4 = tan(@3) */
   w4 = tan( w3 );
   /* #5: @2 = (@2*@4) */
@@ -346,6 +346,10 @@ static int casadi_f0(const casadi_real** arg, casadi_real** res, casadi_int* iw,
   w2 = arg[1] ? arg[1][0] : 0;
   /* #47: output[0][3] = @2 */
   if (res[0]) res[0][3] = w2;
+  /* #48: @2 = input[1][1] */
+  w2 = arg[1] ? arg[1][1] : 0;
+  /* #49: output[0][4] = @2 */
+  if (res[0]) res[0][4] = w2;
   return 0;
 }
 

@@ -54,7 +54,7 @@ class Fren_AD3DMPC:
     def get_state(self):
         """
         Returns the state of the AD
-        :return: 4x1 array with the state: [s0,e_y_psi,vel]
+        :return: 5x1 array with the state: [s0,e_y_psi,vel,delta]
         """
         x = np.expand_dims(self.ad.get_state(stacked=True), 1)
         return x

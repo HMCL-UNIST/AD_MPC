@@ -19,7 +19,7 @@ import threading
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from std_msgs.msg import Bool, Empty
+from std_msgs.msg import Bool, Empty, Float64
 from geometry_msgs.msg import PoseStamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
 from autoware_msgs.msg import Lane, Waypoint
@@ -38,6 +38,8 @@ from ad_mpc.ref_traj import RefTrajectory
 
 from visualization_msgs.msg import MarkerArray, Marker
 
+def clamp(n, minn, maxn):
+    return max(min(maxn, n), minn)
 
 class GPMPCWrapper:
     def __init__(self,environment="carla"):
@@ -46,7 +48,7 @@ class GPMPCWrapper:
         self.n_mpc_nodes = rospy.get_param('~n_nodes', default=20.0)
         self.t_horizon = rospy.get_param('~t_horizon', default=2.0)
         self.traj_resample_vel = rospy.get_param('~traj_resample_vel', default=True)        
-        self.control_freq_factor = rospy.get_param('~control_freq_factor', default=5 if environment == "carla" else 6)
+        self.control_freq_factor = rospy.get_param('~control_freq_factor', default=5 if environment == "carla" else 5)
         
         self.opt_dt = self.t_horizon / (self.n_mpc_nodes * self.control_freq_factor)
 #################################################################        
@@ -56,6 +58,9 @@ class GPMPCWrapper:
         # Last state obtained from odometry
         self.x = None
         self.velocity = None
+        self.steering = None
+        self.steering_max = 0.5
+        self.steering_min = -1*self.steering_max
         self.environment = environment
         # Elapsed time between two recordings
         self.last_update_time = time.time()
@@ -115,11 +120,13 @@ class GPMPCWrapper:
         self.ref_puf_publisher = rospy.Publisher("/mpc_ref_trajectory", MarkerArray, queue_size=1)
         self.mpc_predicted_trj_publisher = rospy.Publisher("/mpc_pred_trajectory", MarkerArray, queue_size=1)
         self.final_ref_publisher = rospy.Publisher("/final_trajectory", MarkerArray, queue_size=1)
+        self.status_pub = rospy.Publisher(status_topic, Bool, queue_size=1)
+        self.steering_pub = rospy.Publisher("/mpc_steering", Float64, queue_size=1)
         # Subscribers
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_callback)
         self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
         self.waypoint_sub = rospy.Subscriber(waypoint_topic, Lane, self.waypoint_callback)
-        self.status_pub = rospy.Publisher(status_topic, Bool, queue_size=1)
+        
 
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
@@ -147,11 +154,11 @@ class GPMPCWrapper:
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
         if self.end_of_goal or len(vel_ref) < self.n_mpc_nodes:
-            ref = [0, 0, 0, 0]                
+            ref = [0, 0, 0, 0, 0]                
             u_ref = [0.0, 0.0]   
             terminal_point = True               
         else:        
-            ref = np.zeros([4,len(vel_ref)])
+            ref = np.zeros([5,len(vel_ref)])
             ref[3] = vel_ref
             ref = ref.transpose()
             u_ref = np.zeros((len(vel_ref)-1,2))
@@ -180,9 +187,17 @@ class GPMPCWrapper:
                 self.predicted_trj_visualize(x_opt)
             ####################################
             self.optimization_dt += time.time() - tic
-            print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
+            # print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
-            control_msg = next_control.drive
+            control_msg = next_control.drive                                 
+            control_msg.steering_angle = max(min(self.steering_max, next_control.drive.steering_angle_velocity*0.1 + self.steering), self.steering_min)                        
+            print("current steering  = " + str(self.steering))
+            print("angle = " + str(control_msg.steering_angle)) 
+            print("angle_velocity = " + str(next_control.drive.steering_angle_velocity)) 
+            tt_steering = Float64()
+            tt_steering.data = -1*control_msg.steering_angle
+
+            self.steering_pub.publish(tt_steering)
             self.control_pub.publish(control_msg)            
 
         except KeyError:
@@ -198,6 +213,8 @@ class GPMPCWrapper:
         if msg.velocity is None:
             return
         self.velocity = msg.velocity
+        self.steering = -msg.control.steer
+
         if self.vehicle_status_available is False:
             self.vehicle_status_available = True        
 
@@ -346,7 +363,9 @@ class GPMPCWrapper:
         e_y = [waypoint_dict['e_y0']]
         e_psi = [waypoint_dict['e_psi0']]
         vel = [self.velocity]
-        self.x = s0+e_y+e_psi+vel
+        steering = [self.steering]
+        
+        self.x = s0+e_y+e_psi+vel+steering
 
         try:
             # Update the state estimate of the AD

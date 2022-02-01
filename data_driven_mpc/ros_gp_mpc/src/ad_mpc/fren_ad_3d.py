@@ -41,10 +41,14 @@ class Fren_AD3D:
         self.e_y = np.zeros((1,))
         self.e_psi = np.zeros((1,))
         self.vel = np.zeros((1,))
+        self.delta = np.zeros((1,))
+        
         
         # Input constraints        
         self.steering_min = -0.52
         self.steering_max = 0.52
+        self.steering_rate_min = -2 # rate of steering angle [rad/s]
+        self.steering_rate_max = 2 # rate of steering angle [rad/s]
         self.acc_min = -10
         self.acc_max = 2
         self.L_R = 1.4
@@ -54,28 +58,29 @@ class Fren_AD3D:
         self.noisy = noisy
 
         
-        # Input - > Accl + Steering angle
+        # Input - > Accl + Steering angle rate
         self.u_noiseless = np.array([0.0, 0.0])
-        self.u = np.array([0.0, 0.0])  # angle, and acceleration
+        self.u = np.array([0.0, 0.0])  # acceleration and angle rate 
 
         
 
     def set_state(self, *args, **kwargs):
         if len(args) != 0:
-            assert len(args) == 1 and len(args[0]) == 4
-            self.s0[0], self.e_y[0], self.e_psi[0], self.vel[0] = args[0]            
+            assert len(args) == 1 and len(args[0]) == 5
+            self.s0[0], self.e_y[0], self.e_psi[0], self.vel[0], self.delta[0] = args[0]            
         else:
             self.s0 = kwargs["s0"]
             self.e_y = kwargs["e_y"]
             self.e_psi = kwargs["e_psi"]
             self.vel = kwargs["vel"]            
+            self.delta = kwargs["delta"]            
 
 
     def get_state(self, stacked=False):
         
         if stacked:
-            return [self.s0[0], self.e_y[0], self.e_psi[0], self.vel[0]] 
-        return [self.s0, self.e_y, self.e_psi, self.vel]
+            return [self.s0[0], self.e_y[0], self.e_psi[0], self.vel[0], self.delta[0]] 
+        return [self.s0, self.e_y, self.e_psi, self.vel, self.delta]
     
     def get_control(self, noisy=False):
         if not noisy:

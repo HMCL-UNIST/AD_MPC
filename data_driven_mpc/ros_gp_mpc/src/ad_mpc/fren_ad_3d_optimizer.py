@@ -40,7 +40,7 @@ class Fren_AD3DOptimizer:
 
         # Weighted squared error loss function q = (p_xyz, a_xyz, v_xyz, r_xyz), r = (u1, u2, u3, u4)
         if q_cost is None:
-            q_cost = np.array([0.0, 10.0, 10., 100.0])
+            q_cost = np.array([0.0, 10.0, 10., 100.0, 0.0])
         if r_cost is None:
             r_cost = np.array([10.0, 100.0])             
 
@@ -56,6 +56,10 @@ class Fren_AD3DOptimizer:
     
         self.steering_min = ad.steering_min
         self.steering_max = ad.steering_max
+
+        self.steering_rate_min = ad.steering_rate_min
+        self.steering_rate_max = ad.steering_rate_max
+        
         self.acc_min = ad.acc_min
         self.acc_max = ad.acc_max
 
@@ -64,10 +68,11 @@ class Fren_AD3DOptimizer:
         self.e_y = cs.MX.sym('e_y', 1)  # e_y 
         self.e_psi = cs.MX.sym('e_psi', 1)  # e_psi 
         self.v = cs.MX.sym('v', 1)  # velocity        
+        self.delta = cs.MX.sym('delta',1)
 
         # Full state vector (4-dimensional)
-        self.x = cs.vertcat(self.s, self.e_y,self.e_psi, self.v)
-        self.state_dim = 4
+        self.x = cs.vertcat(self.s, self.e_y,self.e_psi, self.v, self.delta)
+        self.state_dim = 5
 
         # Control input vector
         u1 = cs.MX.sym('u1')
@@ -150,9 +155,14 @@ class Fren_AD3DOptimizer:
             ocp.constraints.x0 = x_ref
 
             # Set constraints
-            ocp.constraints.lbu = np.array([self.acc_min, self.steering_min])
-            ocp.constraints.ubu = np.array([self.acc_max, self.steering_max])
+            ocp.constraints.lbu = np.array([self.acc_min, self.steering_rate_min])
+            ocp.constraints.ubu = np.array([self.acc_max, self.steering_rate_max])
             ocp.constraints.idxbu = np.array([0, 1])
+
+            ocp.constraints.lbx = np.array([self.steering_min])
+            ocp.constraints.ubx = np.array([self.steering_max])
+            ocp.constraints.idxbx = np.array([4])
+
 
             # Solver options
             ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
@@ -229,25 +239,27 @@ class Fren_AD3DOptimizer:
         Inputs: 'x' state of AD (4x1) and 'u' control input (2x1). Output: differential state vector 'x_dot'
         (4x1)
         """
-        x_dot = cs.vertcat(self.s_dynamics(), self.e_y_dynamics(),self.e_psi_dynamics(), self.v_dynamics())
-        return cs.Function('x_dot', [self.x[:4], self.u], [x_dot], ['x', 'u'], ['x_dot'])
+        x_dot = cs.vertcat(self.s_dynamics(), self.e_y_dynamics(),self.e_psi_dynamics(), self.v_dynamics(), self.delta_dynamics())
+        return cs.Function('x_dot', [self.x[:5], self.u], [x_dot], ['x', 'u'], ['x_dot'])
 
     def s_dynamics(self):        
-        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.u[1]))
+        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.delta))
         return self.v * cs.cos(self.e_psi+beta) / (1 - self.e_y * self.kapparef_s(self.s))   
 
     def e_y_dynamics(self):
-        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.u[1]))        
+        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.delta))        
         return self.v * cs.sin(self.e_psi + beta)
 
     def e_psi_dynamics(self):
-        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.u[1]))        
+        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.delta))        
         dyawdt = self.v / self.ad.L_R * cs.sin(beta)
         dsdt = self.v * cs.cos(self.e_psi+beta) / (1 - self.e_y * self.kapparef_s(self.s) )   
         return dyawdt - dsdt * self.kapparef_s(self.s)
     
     def v_dynamics(self):        
         return self.u[0]   
+    def delta_dynamics(self):
+        return self.u[1]
 
     def set_reference_state(self, x_target=None, u_target=None, curv_ref = None, cdist_ref = None):
         """
@@ -256,7 +268,7 @@ class Fren_AD3DOptimizer:
         :param u_target: 2-dimensional target control input vector (u_1, u_2, u_3, u_4)
         """
         if x_target is None:
-            x_target = [[0, 0, 0, 0]]
+            x_target = [[0, 0, 0, 0, 0]]
             return
         if u_target is None:
             u_target = [0, 0]
@@ -336,7 +348,7 @@ class Fren_AD3DOptimizer:
         """
 
         if initial_state is None:
-            initial_state = [0.0] + [0.0]+ [0.0]+ [0.0]
+            initial_state = [0.0] + [0.0]+ [0.0]+ [0.0] + [0.0]
 
         # Set initial state. Add gp state if needed
         x_init = initial_state
