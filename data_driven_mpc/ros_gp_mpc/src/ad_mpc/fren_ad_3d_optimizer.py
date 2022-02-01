@@ -40,7 +40,7 @@ class Fren_AD3DOptimizer:
 
         # Weighted squared error loss function q = (p_xyz, a_xyz, v_xyz, r_xyz), r = (u1, u2, u3, u4)
         if q_cost is None:
-            q_cost = np.array([0.0, 10.0, 10., 100.0, 0.0])
+            q_cost = np.array([0.0, 10.0, 10., 10.0, 0.0])
         if r_cost is None:
             r_cost = np.array([10.0, 100.0])             
 
@@ -135,9 +135,10 @@ class Fren_AD3DOptimizer:
             ocp.cost.cost_type_e = 'LINEAR_LS'
 
             ocp.cost.W = np.diag(np.concatenate((q_cost, r_cost)))
-            ocp.cost.W_e = np.diag(q_cost)
-            terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
-            ocp.cost.W_e *= terminal_cost
+            ocp.cost.W_e = np.diag(q_cost)*0.1
+            ocp.cost.W_0 = np.diag(q_cost)*10
+            # terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
+            # ocp.cost.W_e *= terminal_cost
 
             ocp.cost.Vx = np.zeros((ny, nx))
             ocp.cost.Vx[:nx, :nx] = np.eye(nx)

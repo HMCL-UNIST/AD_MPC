@@ -187,13 +187,13 @@ class GPMPCWrapper:
                 self.predicted_trj_visualize(x_opt)
             ####################################
             self.optimization_dt += time.time() - tic
-            # print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
+            print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
             control_msg = next_control.drive                                 
             control_msg.steering_angle = max(min(self.steering_max, next_control.drive.steering_angle_velocity*0.1 + self.steering), self.steering_min)                        
-            print("current steering  = " + str(self.steering))
-            print("angle = " + str(control_msg.steering_angle)) 
-            print("angle_velocity = " + str(next_control.drive.steering_angle_velocity)) 
+            # print("current steering  = " + str(self.steering))
+            # print("angle = " + str(control_msg.steering_angle)) 
+            # print("angle_velocity = " + str(next_control.drive.steering_angle_velocity)) 
             tt_steering = Float64()
             tt_steering.data = -1*control_msg.steering_angle
 
