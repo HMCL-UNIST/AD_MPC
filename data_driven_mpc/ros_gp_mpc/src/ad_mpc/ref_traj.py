@@ -19,7 +19,7 @@ def compute_curvature(cdists, psis):
 	if len(curv_raw) > 33:
 		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw) # curvature filter suggested by Jinkkwon Kim.
 	else:
-		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=3)		
+		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=min(len(cdists),3))		
 	# Curvature Filtering: (https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html)
 	
 	return curv_filt

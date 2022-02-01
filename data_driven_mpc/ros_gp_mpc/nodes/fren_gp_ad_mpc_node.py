@@ -281,7 +281,7 @@ class GPMPCWrapper:
         """
         :type msg: autoware_msgs/Lane 
         """                
-        if len(msg.waypoints) < 5:
+        if len(msg.waypoints) < 3:
             self.end_of_goal = True
         else:
             self.end_of_goal = False
@@ -290,7 +290,7 @@ class GPMPCWrapper:
         if not self.waypoint_available:
             self.waypoint_available = True
         
-        if len(msg.waypoints) > 0:                         
+        if len(msg.waypoints) > 3:                         
             # received messages             
             # msg.waypoints = msg.waypoints[0:]
             self.x_ref = [msg.waypoints[i].pose.pose.position.x for i in range(len(msg.waypoints))]
@@ -302,6 +302,7 @@ class GPMPCWrapper:
             # self.final_waypoint_visualize()
             # resample trajectory with respect to vel_ref 
             # if self.traj_resample_vel and len(self.x_ref) > 33:                        
+            
             self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
         else:
             rospy.loginfo("Waypoints are empty")    
