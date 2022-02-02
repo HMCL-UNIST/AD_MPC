@@ -11,6 +11,11 @@ Non-linear bicycle dynamics in Frenet–Serret formulas
 ![vehicle_dynamics6](https://user-images.githubusercontent.com/32535170/152135286-fdf00505-9daa-43b2-b5e2-a174b651900a.png)
 ![vehicle_dynaamics7](https://user-images.githubusercontent.com/32535170/152135279-f5904dfe-4559-41fd-bd1d-42fa1a4a6768.png)
  
+ ### Typical value for cornering stiffness 
+ 
+![cornering_stiffness](https://user-images.githubusercontent.com/32535170/152141345-d32b0495-da7b-4a6f-980d-1236ecf07351.png)
+
+
  ## References
  
  ### Bicycle dyanmics (ETH Zurich Racecar) 
