@@ -12,8 +12,12 @@ Non-linear bicycle dynamics in Frenet–Serret formulas
 ![vehicle_dynaamics7](https://user-images.githubusercontent.com/32535170/152135279-f5904dfe-4559-41fd-bd1d-42fa1a4a6768.png)
  
  ### Typical value for cornering stiffness 
- 
-![cornering_stiffness](https://user-images.githubusercontent.com/32535170/152141345-d32b0495-da7b-4a6f-980d-1236ecf07351.png)
+ ![cornering_stiffness](https://user-images.githubusercontent.com/32535170/152141345-d32b0495-da7b-4a6f-980d-1236ecf07351.png)
+ --> cornering stiffness per degree is 16~17% of load on tyre.. 
+ e.g. 
+ ![weight_distribution_eg](https://user-images.githubusercontent.com/32535170/152142116-4c346683-e26e-4292-834f-a44d37f0c70e.png)
+Cornering Stiffness for single front wheel, Cf-> 1000*0.5 *9.81 * 0.165 = 10,000 *0.16 N/degree = 809 N/degree = 46365 N/rad 
+Cornering Stiffness for single rear wheel, Cr-> 840*0.5 *9.81 * 0.165 = 10,000 *0.16 N/degree = 680 N/degree = 39000 N/rad 
 
 
  ## References
