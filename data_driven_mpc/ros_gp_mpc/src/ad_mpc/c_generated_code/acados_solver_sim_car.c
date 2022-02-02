@@ -545,13 +545,16 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     // x
     int* idxbx = malloc(NBX * sizeof(int));
     
-    idxbx[0] = 4;
+    idxbx[0] = 1;
+    idxbx[1] = 4;
     double* lubx = calloc(2*NBX, sizeof(double));
     double* lbx = lubx;
     double* ubx = lubx + NBX;
     
-    lbx[0] = -0.52;
-    ubx[0] = 0.52;
+    lbx[0] = -0.5;
+    ubx[0] = 0.5;
+    lbx[1] = -0.52;
+    ubx[1] = 0.52;
 
     for (int i = 1; i < N; i++)
     {

@@ -159,10 +159,11 @@ class Fren_AD3DOptimizer:
             ocp.constraints.lbu = np.array([self.acc_min, self.steering_rate_min])
             ocp.constraints.ubu = np.array([self.acc_max, self.steering_rate_max])
             ocp.constraints.idxbu = np.array([0, 1])
-
-            ocp.constraints.lbx = np.array([self.steering_min])
-            ocp.constraints.ubx = np.array([self.steering_max])
-            ocp.constraints.idxbx = np.array([4])
+            e_y_min = -1
+            e_y_max = -1*e_y_min
+            ocp.constraints.lbx = np.array([e_y_min, self.steering_min])
+            ocp.constraints.ubx = np.array([e_y_max, self.steering_max])
+            ocp.constraints.idxbx = np.array([1, 4])
 
 
             # Solver options
