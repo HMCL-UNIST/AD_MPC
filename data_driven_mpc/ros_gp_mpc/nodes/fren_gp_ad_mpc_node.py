@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from std_msgs.msg import Bool, Empty, Float64
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
 from autoware_msgs.msg import Lane, Waypoint
@@ -70,7 +71,9 @@ class GPMPCWrapper:
         self.last_u_ref = None
 
         self.end_of_goal = False
-    
+
+        self.odom_available = False  
+        
         # Reference trajectory variables
         self.x_ref = None
         self.t_ref = None
@@ -107,6 +110,7 @@ class GPMPCWrapper:
             vehicle_status_topic = "/carla/ego_vehicle/vehicle_status"
             control_topic = "/carla/ego_vehicle/ackermann_cmd"            
             waypoint_topic = "/final_waypoints"
+            sim_odom_topic = "/carla/ego_vehicle/odometry"
         else:
             # Real world setup
             pose_topic = "/ndt_pose"
@@ -126,9 +130,11 @@ class GPMPCWrapper:
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_callback)
         self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
         self.waypoint_sub = rospy.Subscriber(waypoint_topic, Lane, self.waypoint_callback)
+        self.odom_sub = rospy.Subscriber(sim_odom_topic, Odometry, self.odom_callback)
         
 
         rate = rospy.Rate(1)
+     
         while not rospy.is_shutdown():
             # Publish if MPC is busy with a current trajectory
             msg = Bool()
@@ -154,11 +160,11 @@ class GPMPCWrapper:
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
         if self.end_of_goal or len(vel_ref) < self.n_mpc_nodes:
-            ref = [0, 0, 0, 0, 0]                
+            ref = [0, 0, 0, 0, 0, 0, 0]                
             u_ref = [0.0, 0.0]   
             terminal_point = True               
         else:        
-            ref = np.zeros([5,len(vel_ref)])
+            ref = np.zeros([7,len(vel_ref)])
             ref[3] = vel_ref
             ref = ref.transpose()
             u_ref = np.zeros((len(vel_ref)-1,2))
@@ -335,7 +341,13 @@ class GPMPCWrapper:
         
         
         
-  
+    def odom_callback(self, msg):
+        if self.odom_available is False:
+            self.odom_available = True  
+        self.v_x = msg.twist.twist.linear.x 
+        self.v_y = msg.twist.twist.linear.y
+        self.psi_dot = msg.twist.twist.angular.z
+
     def pose_callback(self, msg):
         """                
         :type msg: PoseStamped
@@ -351,10 +363,8 @@ class GPMPCWrapper:
 
         
 
-        if self.velocity is None:
-            return
-        if not self.waypoint_available:
-            return
+        if self.velocity is None or not self.odom_available or not self.waypoint_available:
+            return        
 
         vel = [self.velocity]    
         # self.x = pose+psi+vel        
@@ -362,13 +372,16 @@ class GPMPCWrapper:
         s0 = [waypoint_dict['s0']]
         e_y = [waypoint_dict['e_y0']]
         e_psi = [waypoint_dict['e_psi0']]
-        vel = [self.velocity]
+        v_x = [self.v_x]
+        v_y = [self.v_y]
+        psi_dot = [self.psi_dot]        
         steering = [self.steering]
         
-        self.x = s0+e_y+e_psi+vel+steering
+        self.x = s0+e_y+e_psi+v_x+v_y+psi_dot+steering
 
         try:
             # Update the state estimate of the AD
+
             self.gp_mpc.set_state(self.x)
             # reset the reference traj 
             if not self.waypoint_available:

@@ -55,8 +55,9 @@ class Fren_ROSGPMPC:
                 "solver_type": "SQP_RTI",
                 "terminal_cost": False
             }
-
-        q_diagonal = np.array([0.0, 10.0, 10.0, 100.0, 0.1])
+                             # s,  e_y,  e_psi, v_x, v_y, psi_dot, delta
+        q_diagonal = np.array([0.0, 10.0, 10.0, 10.0, 0.0, 1.0, 0.1 ])
+                             # accl, delta_dot
         r_diagonal = np.array([1.0, 1.0])        
 
         ad_mpc = Fren_AD3DMPC(ad, t_horizon=t_horizon, optimization_dt=opt_dt, n_nodes=n_mpc_nodes, 
@@ -93,7 +94,7 @@ class Fren_ROSGPMPC:
         next_control_with_stamp = AckermannDriveStamped()                
         next_control_with_stamp.header = std_msgs.msg.Header()
         next_control_with_stamp.header.stamp = rospy.Time.now()        
-        next_control_with_stamp.drive.steering_angle = x_opt[0,4]
+        next_control_with_stamp.drive.steering_angle = x_opt[0,6]
         next_control_with_stamp.drive.steering_angle_velocity = w_opt[1]
         next_control_with_stamp.drive.speed = x_opt[0,3]                
         next_control_with_stamp.drive.acceleration = w_opt[0]        

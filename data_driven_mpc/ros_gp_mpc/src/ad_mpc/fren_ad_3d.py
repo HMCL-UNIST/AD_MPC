@@ -40,19 +40,38 @@ class Fren_AD3D:
         self.s0 = np.zeros((1,))        
         self.e_y = np.zeros((1,))
         self.e_psi = np.zeros((1,))
-        self.vel = np.zeros((1,))
+        self.v_x = np.zeros((1,))
+        self.v_y = np.zeros((1,))
+        self.psi_dot = np.zeros((1,))
         self.delta = np.zeros((1,))
         
-        
+        #vehicle Mass in kg 
+        self.mass = 2000
+        self.f_mass = 1000
+        self.r_mass = self.mass - self.f_mass
+        self.L = 2.8 
+        self.L_F = self.L*(1-self.f_mass/self.mass)
+        self.L_R = self.L*(1-self.r_mass/self.mass)
+
+        #Moment of Inertia in z axis 
+        self.Iz = self.L_F*self.L_R*(self.r_mass+self.f_mass)
+                
+        #Cornering Stiffness for single wheel(N/rad) 
+        # Cx = total load * weight distribution on each wheel * g(Kg to Newton) * 16.5%(approximatio) * 57.3 (1/degree to radian) 
+        self.Cf = self.f_mass*0.5*9.81*0.165*180/3.14195 
+        self.Cr =  self.r_mass*0.5*9.81*0.165*180/3.14195 
+
+        # blend velocity  for mixing dynamical and kinamatical model
+        self.blend_max = 5
+        self.blend_min = 3
         # Input constraints        
         self.steering_min = -0.52
         self.steering_max = 0.52
         self.steering_rate_min = -2 # rate of steering angle [rad/s]
         self.steering_rate_max = 2 # rate of steering angle [rad/s]
         self.acc_min = -20
-        self.acc_max = 3
-        self.L_R = 1.4
-        self.L_F = 1.4
+        self.acc_max = 20
+        
 
         self.noisy_input = False
         self.noisy = noisy
@@ -66,21 +85,23 @@ class Fren_AD3D:
 
     def set_state(self, *args, **kwargs):
         if len(args) != 0:
-            assert len(args) == 1 and len(args[0]) == 5
-            self.s0[0], self.e_y[0], self.e_psi[0], self.vel[0], self.delta[0] = args[0]            
+            assert len(args) == 1 and len(args[0]) == 7
+            self.s0[0], self.e_y[0], self.e_psi[0], self.v_x[0], self.v_y[0], self.psi_dot[0], self.delta[0] = args[0]            
         else:
             self.s0 = kwargs["s0"]
             self.e_y = kwargs["e_y"]
             self.e_psi = kwargs["e_psi"]
-            self.vel = kwargs["vel"]            
+            self.v_x = kwargs["v_x"]            
+            self.v_y = kwargs["v_y"]           
+            self.psi_dot = kwargs["psi_dot"]           
             self.delta = kwargs["delta"]            
 
 
     def get_state(self, stacked=False):
         
         if stacked:
-            return [self.s0[0], self.e_y[0], self.e_psi[0], self.vel[0], self.delta[0]] 
-        return [self.s0, self.e_y, self.e_psi, self.vel, self.delta]
+            return [self.s0[0], self.e_y[0], self.e_psi[0], self.v_x[0], self.v_y[0], self.psi_dot[0], self.delta[0]] 
+        return [self.s0, self.e_y, self.e_psi, self.v_x, self.v_y, self.psi_dot, self.delta]
     
     def get_control(self, noisy=False):
         if not noisy:

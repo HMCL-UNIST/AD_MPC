@@ -38,21 +38,33 @@ class Fren_AD3DOptimizer:
         :param solver_options: Optional set of extra options dictionary for solvers.        
         """
 
-        # Weighted squared error loss function q = (p_xyz, a_xyz, v_xyz, r_xyz), r = (u1, u2, u3, u4)
+                              # s,  e_y,  e_psi, v_x, v_y, psi_dot, delta
         if q_cost is None:
-            q_cost = np.array([0.0, 10.0, 10., 10.0, 0.0])
+            q_cost = np.array([0.0, 10.0, 10.0, 10.0, 10.0, 1.0, 0.1])
         if r_cost is None:
             r_cost = np.array([10.0, 100.0])             
 
         self.T = t_horizon  # Time horizon
         self.N = n_nodes  # number of control nodes within horizon
 
+        
 
         self.ad = ad
         s_init = [0,1,2,3,4]
         self.curv_ref = [1e-6,1e-6,1e-6,1e-6,1e-6]
         self.kapparef_s = interpolant("kapparef_s", "bspline", [s_init], self.curv_ref) 
         
+        #vehicle Mass in kg 
+        self.mass = ad.mass                
+        self.L_F = ad.L_F
+        self.L_R = ad.L_R
+        #Moment of Inertia in z axis 
+        self.Iz = ad.Iz                
+        #Cornering Stiffness for single wheel(N/rad)         
+        self.Cf = ad.Cf
+        self.Cr = ad.Cr
+        self.blend_max = ad.blend_max
+        self.blend_min = ad.blend_min
     
         self.steering_min = ad.steering_min
         self.steering_max = ad.steering_max
@@ -67,16 +79,20 @@ class Fren_AD3DOptimizer:
         self.s = cs.MX.sym('s', 1)  # cdist
         self.e_y = cs.MX.sym('e_y', 1)  # e_y 
         self.e_psi = cs.MX.sym('e_psi', 1)  # e_psi 
-        self.v = cs.MX.sym('v', 1)  # velocity        
-        self.delta = cs.MX.sym('delta',1)
+        self.v_x = cs.MX.sym('v_x', 1)  # velocity in longitudinal direction  
+        self.v_y = cs.MX.sym('v_y', 1)  # velocity in latitidunal direction
+        self.psi_dot = cs.MX.sym('psi_dot', 1)  # yaw rate 
+        self.delta = cs.MX.sym('delta',1) 
 
         # Full state vector (4-dimensional)
-        self.x = cs.vertcat(self.s, self.e_y,self.e_psi, self.v, self.delta)
-        self.state_dim = 5
+        self.x = cs.vertcat(self.s, self.e_y,self.e_psi, self.v_x, self.v_y, self.psi_dot, self.delta)
+        self.state_dim = 7
 
         # Control input vector
         u1 = cs.MX.sym('u1')
         u2 = cs.MX.sym('u2')
+
+        self.lmbda = cs.MX.sym('lmbda', 1)
         
         self.u = cs.vertcat(u1, u2)
 
@@ -86,7 +102,6 @@ class Fren_AD3DOptimizer:
         # Initialize objective function, 0 target state and integration equations
         self.L = None
         self.target = None
-
 
         # Build full model. Will have 4 variables. self.dyn_x contains the symbolic variable that
         # should be used to evaluate the dynamics function. It corresponds to self.x if there are no GP's, or
@@ -136,7 +151,7 @@ class Fren_AD3DOptimizer:
 
             ocp.cost.W = np.diag(np.concatenate((q_cost, r_cost)))
             ocp.cost.W_e = np.diag(q_cost)*0.1
-            ocp.cost.W_0 = np.diag(q_cost)*10
+            ocp.cost.W_0 = np.diag(q_cost)
             # terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
             # ocp.cost.W_e *= terminal_cost
 
@@ -159,11 +174,11 @@ class Fren_AD3DOptimizer:
             ocp.constraints.lbu = np.array([self.acc_min, self.steering_rate_min])
             ocp.constraints.ubu = np.array([self.acc_max, self.steering_rate_max])
             ocp.constraints.idxbu = np.array([0, 1])
-            e_y_min = -1
-            e_y_max = -1*e_y_min
-            ocp.constraints.lbx = np.array([e_y_min, self.steering_min])
-            ocp.constraints.ubx = np.array([e_y_max, self.steering_max])
-            ocp.constraints.idxbx = np.array([1, 4])
+            # e_y_min = -10
+            # e_y_max = -10*e_y_min
+            ocp.constraints.lbx = np.array([self.steering_min])
+            ocp.constraints.ubx = np.array([self.steering_max])
+            ocp.constraints.idxbx = np.array([6])
 
 
             # Solver options
@@ -171,7 +186,7 @@ class Fren_AD3DOptimizer:
             ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
             ocp.solver_options.integrator_type = 'ERK'
             ocp.solver_options.print_level = 0
-            ocp.solver_options.nlp_solver_type = 'SQP_RTI' if solver_options is None else solver_options["solver_type"]
+            ocp.solver_options.nlp_solver_type = 'SQP_RTI' if solver_options is None else solver_options["solver_type"]            
 
             # Compile acados OCP solver if necessary
             json_file = os.path.join(self.acados_models_dir, key_model.name + '_acados_ocp.json')
@@ -240,26 +255,47 @@ class Fren_AD3DOptimizer:
         :return: CasADi function that computes the analytical differential state dynamics of the AD  model.
         Inputs: 'x' state of AD (4x1) and 'u' control input (2x1). Output: differential state vector 'x_dot'
         (4x1)
-        """
-        x_dot = cs.vertcat(self.s_dynamics(), self.e_y_dynamics(),self.e_psi_dynamics(), self.v_dynamics(), self.delta_dynamics())
-        return cs.Function('x_dot', [self.x[:5], self.u], [x_dot], ['x', 'u'], ['x_dot'])
+        """        
+        
+        self.lmbda = cs.fmin(cs.fmax((self.v_x - self.blend_min)/(self.blend_max-self.blend_min),0.0),1.0)                        
+        # self.lmbda = 0.0
+        x_dot = cs.vertcat(self.s_dynamics(), self.e_y_dynamics(),self.e_psi_dynamics(), self.v_x_dynamics(),self.v_y_dynamics(),self.psi_dot_dynamics(), self.delta_dynamics())
+        
+        return cs.Function('x_dot', [self.x[:7], self.u], [x_dot], ['x', 'u'], ['x_dot'])
 
-    def s_dynamics(self):        
-        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.delta))
-        return self.v * cs.cos(self.e_psi+beta) / (1 - self.e_y * self.kapparef_s(self.s))   
+    def s_dynamics(self):                               
+        s_dynamics = (self.v_x * cs.cos(self.e_psi) - self.v_y*cs.sin(self.e_psi)) / (1 - self.e_y * self.kapparef_s(self.s))        
+        return s_dynamics
 
-    def e_y_dynamics(self):
-        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.delta))        
-        return self.v * cs.sin(self.e_psi + beta)
+    def e_y_dynamics(self):        
+        e_y_dynamics = self.v_x*cs.sin(self.e_psi)+self.v_y*cs.cos(self.e_psi)        
+        return e_y_dynamics
 
-    def e_psi_dynamics(self):
-        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.delta))        
-        dyawdt = self.v / self.ad.L_R * cs.sin(beta)
-        dsdt = self.v * cs.cos(self.e_psi+beta) / (1 - self.e_y * self.kapparef_s(self.s) )   
-        return dyawdt - dsdt * self.kapparef_s(self.s)
+    def e_psi_dynamics(self):               
+        e_psi_dynamics = self.psi_dot - self.e_y*self.kapparef_s(self.s)*(self.v_x * cs.cos(self.e_psi) - self.v_y*cs.sin(self.e_psi)) / (1 - self.e_y * self.kapparef_s(self.s))
+        e_psi_kinematics = self.psi_dot - self.e_y*self.kapparef_s(self.s)*(self.v_x * cs.cos(self.e_psi) - self.v_y*cs.sin(self.e_psi)) / (1 - self.e_y * self.kapparef_s(self.s))
+        return self.lmbda*e_psi_dynamics+(1-self.lmbda)*e_psi_kinematics
     
-    def v_dynamics(self):        
-        return self.u[0]   
+    def v_x_dynamics(self):                
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/self.v_x)        
+        v_x_dynamics = self.u[0] - 1/self.mass*F_f_y*cs.sin(self.delta)+self.v_y*self.psi_dot                 
+        v_x_kinematics = self.u[0]                
+        return self.lmbda*v_x_dynamics+(1-self.lmbda)*v_x_kinematics    
+
+    def v_y_dynamics(self):            
+        F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/self.v_x 
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/self.v_x)      
+        v_y_dynamics = 1/self.mass * (  F_r_y + F_f_y*cs.cos(self.delta)) - self.v_x*self.psi_dot  
+        v_y_kinematics = (self.u[1]*self.v_x+self.delta*self.u[0])*self.L_R/(self.L_R+self.L_F)        
+        return self.lmbda*v_y_dynamics+(1-self.lmbda)*v_y_kinematics   
+    
+    def psi_dot_dynamics(self):                
+        F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/self.v_x 
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/self.v_x)   
+        psi_dot_dynamics = 1/self.Iz*(self.L_F*F_f_y*cs.cos(self.delta)-self.L_R*F_r_y)     
+        psi_dot_kinematics = (self.u[1]*self.v_x+self.delta*self.u[0])/(self.L_R+self.L_F)        
+        return self.lmbda*psi_dot_dynamics+(1-self.lmbda)*psi_dot_kinematics   
+
     def delta_dynamics(self):
         return self.u[1]
 
@@ -270,7 +306,7 @@ class Fren_AD3DOptimizer:
         :param u_target: 2-dimensional target control input vector (u_1, u_2, u_3, u_4)
         """
         if x_target is None:
-            x_target = [[0, 0, 0, 0, 0]]
+            x_target = [[0, 0, 0, 0, 0, 0, 0]]
             return
         if u_target is None:
             u_target = [0, 0]
@@ -337,6 +373,7 @@ class Fren_AD3DOptimizer:
         return gp_ind
 
     
+        
     def run_optimization(self, initial_state=None, use_model=0, return_x=False, gp_regression_state=None):
         """
         Optimizes a trajectory to reach the pre-set target state, starting from the input initial state, that minimizes
@@ -350,17 +387,19 @@ class Fren_AD3DOptimizer:
         """
 
         if initial_state is None:
-            initial_state = [0.0] + [0.0]+ [0.0]+ [0.0] + [0.0]
+            initial_state = [0.0] + [0.0]+ [0.0]+ [0.0] + [0.0] + [0.0] + [0.0]
 
         # Set initial state. Add gp state if needed
         x_init = initial_state
         x_init = np.stack(x_init)
         x_init = x_init.squeeze()
-
+        
+        
         # Set initial condition, equality constraint
         self.acados_ocp_solver[use_model].set(0, 'lbx', x_init)
         self.acados_ocp_solver[use_model].set(0, 'ubx', x_init)
         
+                
         # Solve OCPacados_ocp_solver
         self.acados_ocp_solver[use_model].solve()
 

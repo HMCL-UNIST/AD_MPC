@@ -48,6 +48,7 @@ class Fren_AD3DMPC:
                                         model_name=model_name, 
                                         solver_options=solver_options)
 
+
     def clear(self):
         self.ad_opt.clear_acados_model()
 
