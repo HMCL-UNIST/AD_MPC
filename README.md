@@ -1,6 +1,8 @@
 # AD_MPC
 MPC controller for Autonomous vehicle
 
+Non-linear bicycle dynamics in Frenet–Serret formulas
+
 ![vehicle_dynamics1](https://user-images.githubusercontent.com/32535170/152135021-e2a64c43-9d42-44fa-ad94-7c335503462b.png)
 ![vehicle_dynamics2](https://user-images.githubusercontent.com/32535170/152135293-6faca7ed-c98c-425c-88d8-03ec7c3fb00f.png)
 ![vehicle_dynmaics3](https://user-images.githubusercontent.com/32535170/152135292-7089d7bc-0d19-49d3-835a-c439d2a3b70c.png)
