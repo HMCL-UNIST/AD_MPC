@@ -1,11 +1,13 @@
 # AD_MPC
 MPC controller for Autonomous vehicle
 
-
-
-
- 
- 
+![vehicle_dynamics1](https://user-images.githubusercontent.com/32535170/152135021-e2a64c43-9d42-44fa-ad94-7c335503462b.png)
+![vehicle_dynamics2](https://user-images.githubusercontent.com/32535170/152135293-6faca7ed-c98c-425c-88d8-03ec7c3fb00f.png)
+![vehicle_dynmaics3](https://user-images.githubusercontent.com/32535170/152135292-7089d7bc-0d19-49d3-835a-c439d2a3b70c.png)
+![vehicle_dynamics4](https://user-images.githubusercontent.com/32535170/152135290-758b7ade-bf16-4648-a27a-fe6c1663c0cf.png)
+![vehicle_dynamic5](https://user-images.githubusercontent.com/32535170/152135288-7ea9ced5-8211-4b6b-9ccd-1c3cc697aec3.png)
+![vehicle_dynamics6](https://user-images.githubusercontent.com/32535170/152135286-fdf00505-9daa-43b2-b5e2-a174b651900a.png)
+![vehicle_dynaamics7](https://user-images.githubusercontent.com/32535170/152135279-f5904dfe-4559-41fd-bd1d-42fa1a4a6768.png)
  
  ## References
  
