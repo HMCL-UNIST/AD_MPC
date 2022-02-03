@@ -40,7 +40,7 @@
 #define SIM_CAR_NX     7
 #define SIM_CAR_NZ     0
 #define SIM_CAR_NU     2
-#define SIM_CAR_NP     0
+#define SIM_CAR_NP     1
 #define SIM_CAR_NBX    1
 #define SIM_CAR_NBX0   7
 #define SIM_CAR_NBU    2
@@ -61,7 +61,7 @@
 #define SIM_CAR_NY0    9
 #define SIM_CAR_NY     9
 #define SIM_CAR_NYN    7
-#define SIM_CAR_N      20
+#define SIM_CAR_N      10
 #define SIM_CAR_NH     0
 #define SIM_CAR_NPHI   0
 #define SIM_CAR_NHN    0

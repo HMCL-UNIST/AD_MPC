@@ -297,7 +297,7 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
         capsule->forw_vde_casadi[i].casadi_sparsity_in = &sim_car_expl_vde_forw_sparsity_in;
         capsule->forw_vde_casadi[i].casadi_sparsity_out = &sim_car_expl_vde_forw_sparsity_out;
         capsule->forw_vde_casadi[i].casadi_work = &sim_car_expl_vde_forw_work;
-        external_function_param_casadi_create(&capsule->forw_vde_casadi[i], 0);
+        external_function_param_casadi_create(&capsule->forw_vde_casadi[i], 1);
     }
 
     capsule->expl_ode_fun = (external_function_param_casadi *) malloc(sizeof(external_function_param_casadi)*N);
@@ -308,7 +308,7 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
         capsule->expl_ode_fun[i].casadi_sparsity_in = &sim_car_expl_ode_fun_sparsity_in;
         capsule->expl_ode_fun[i].casadi_sparsity_out = &sim_car_expl_ode_fun_sparsity_out;
         capsule->expl_ode_fun[i].casadi_work = &sim_car_expl_ode_fun_work;
-        external_function_param_casadi_create(&capsule->expl_ode_fun[i], 0);
+        external_function_param_casadi_create(&capsule->expl_ode_fun[i], 1);
     }
 
 
@@ -531,8 +531,8 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     double* lbu = lubu;
     double* ubu = lubu + NBU;
     
-    lbu[0] = -20;
-    ubu[0] = 20;
+    lbu[0] = -10;
+    ubu[0] = 3;
     lbu[1] = -2;
     ubu[1] = 2;
 
@@ -686,6 +686,15 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
 
 
 
+    // initialize parameters to nominal value
+    double* p = calloc(NP, sizeof(double));
+    
+
+    for (int i = 0; i <= N; i++)
+    {
+        sim_car_acados_update_params(capsule, i, p, NP);
+    }
+    free(p);
 
     status = ocp_nlp_precompute(capsule->nlp_solver, nlp_in, nlp_out);
 
@@ -703,12 +712,39 @@ int sim_car_acados_update_params(sim_car_solver_capsule * capsule, int stage, do
 {
     int solver_status = 0;
 
-    int casadi_np = 0;
+    int casadi_np = 1;
     if (casadi_np != np) {
         printf("acados_update_params: trying to set %i parameters for external functions."
             " External function has %i parameters. Exiting.\n", np, casadi_np);
         exit(1);
     }
+    const int N = capsule->nlp_solver_plan->N;
+    if (stage < N && stage >= 0)
+    {
+        capsule->forw_vde_casadi[stage].set_param(capsule->forw_vde_casadi+stage, p);
+        capsule->expl_ode_fun[stage].set_param(capsule->expl_ode_fun+stage, p);
+    
+
+        // constraints
+    
+
+        // cost
+        if (stage == 0)
+        {
+        }
+        else // 0 < stage < N
+        {
+        }
+    }
+
+    else // stage == N
+    {
+        // terminal shooting node has no dynamics
+        // cost
+        // constraints
+    
+    }
+
 
     return solver_status;
 }

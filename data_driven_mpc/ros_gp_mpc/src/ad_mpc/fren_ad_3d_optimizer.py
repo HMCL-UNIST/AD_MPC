@@ -12,6 +12,7 @@ this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
 
+from mimetypes import init
 import os
 import sys
 import shutil
@@ -50,10 +51,10 @@ class Fren_AD3DOptimizer:
         
 
         self.ad = ad
-        s_init = [0,1,2,3,4]
-        self.curv_ref = [1e-6,1e-6,1e-6,1e-6,1e-6]
+        s_init = [0,1,2,3,4,5,6,7]
+        self.curv_ref = [1e-6,1e-6,1e-6,1e-6,1e-6,1e-6,1e-6,1e-6]
         self.kapparef_s = interpolant("kapparef_s", "bspline", [s_init], self.curv_ref) 
-        
+                
         #vehicle Mass in kg 
         self.mass = ad.mass                
         self.L_F = ad.L_F
@@ -83,6 +84,8 @@ class Fren_AD3DOptimizer:
         self.v_y = cs.MX.sym('v_y', 1)  # velocity in latitidunal direction
         self.psi_dot = cs.MX.sym('psi_dot', 1)  # yaw rate 
         self.delta = cs.MX.sym('delta',1) 
+        self.switch = cs.MX.sym('switch',1) 
+        
 
         # Full state vector (4-dimensional)
         self.x = cs.vertcat(self.s, self.e_y,self.e_psi, self.v_x, self.v_y, self.psi_dot, self.delta)
@@ -92,7 +95,6 @@ class Fren_AD3DOptimizer:
         u1 = cs.MX.sym('u1')
         u2 = cs.MX.sym('u2')
 
-        self.lmbda = cs.MX.sym('lmbda', 1)
         
         self.u = cs.vertcat(u1, u2)
 
@@ -242,8 +244,10 @@ class Fren_AD3DOptimizer:
 
         x_ = self.x
         dynamics_ = nominal
-
-        acados_models[0] = fill_in_acados_model(x=x_, u=self.u, p=[], dynamics=dynamics_, name=model_name)
+        
+        params = cs.vertcat(self.switch)
+        
+        acados_models[0] = fill_in_acados_model(x=x_, u=self.u, p=params, dynamics=dynamics_, name=model_name)
 
         return acados_models, dynamics_equations
 
@@ -257,46 +261,46 @@ class Fren_AD3DOptimizer:
         (4x1)
         """        
         
-        self.lmbda = cs.fmin(cs.fmax((self.v_x - self.blend_min)/(self.blend_max-self.blend_min),0.0),1.0)                        
-        # self.lmbda = 0.0
         x_dot = cs.vertcat(self.s_dynamics(), self.e_y_dynamics(),self.e_psi_dynamics(), self.v_x_dynamics(),self.v_y_dynamics(),self.psi_dot_dynamics(), self.delta_dynamics())
         
         return cs.Function('x_dot', [self.x[:7], self.u], [x_dot], ['x', 'u'], ['x_dot'])
-
-    def s_dynamics(self):                               
+    
+    def s_dynamics(self):           
         s_dynamics = (self.v_x * cs.cos(self.e_psi) - self.v_y*cs.sin(self.e_psi)) / (1 - self.e_y * self.kapparef_s(self.s))        
         return s_dynamics
 
-    def e_y_dynamics(self):        
+    def e_y_dynamics(self):         
         e_y_dynamics = self.v_x*cs.sin(self.e_psi)+self.v_y*cs.cos(self.e_psi)        
         return e_y_dynamics
 
-    def e_psi_dynamics(self):               
-        e_psi_dynamics = self.psi_dot - self.e_y*self.kapparef_s(self.s)*(self.v_x * cs.cos(self.e_psi) - self.v_y*cs.sin(self.e_psi)) / (1 - self.e_y * self.kapparef_s(self.s))
-        e_psi_kinematics = self.psi_dot - self.e_y*self.kapparef_s(self.s)*(self.v_x * cs.cos(self.e_psi) - self.v_y*cs.sin(self.e_psi)) / (1 - self.e_y * self.kapparef_s(self.s))
-        return self.lmbda*e_psi_dynamics+(1-self.lmbda)*e_psi_kinematics
+    def e_psi_dynamics(self):             
+        e_psi_dynamics = self.psi_dot - self.e_y*self.kapparef_s(self.s)*(self.v_x * cs.cos(self.e_psi) - self.v_y*cs.sin(self.e_psi)) / (1 - self.e_y * self.kapparef_s(self.s))        
+        return e_psi_dynamics
     
-    def v_x_dynamics(self):                
-        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/self.v_x)        
-        v_x_dynamics = self.u[0] - 1/self.mass*F_f_y*cs.sin(self.delta)+self.v_y*self.psi_dot                 
+    def v_x_dynamics(self):                   
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))        
+        v_x_dynamics = self.u[0] - (1/self.mass)*F_f_y*cs.sin(self.delta)+self.v_y*self.psi_dot                 
         v_x_kinematics = self.u[0]                
-        return self.lmbda*v_x_dynamics+(1-self.lmbda)*v_x_kinematics    
+        return self.switch*v_x_dynamics+(1-self.switch)*v_x_kinematics
+        
 
-    def v_y_dynamics(self):            
-        F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/self.v_x 
-        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/self.v_x)      
+    def v_y_dynamics(self):                    
+        F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/(self.v_x+1e-99)
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))   
         v_y_dynamics = 1/self.mass * (  F_r_y + F_f_y*cs.cos(self.delta)) - self.v_x*self.psi_dot  
         v_y_kinematics = (self.u[1]*self.v_x+self.delta*self.u[0])*self.L_R/(self.L_R+self.L_F)        
-        return self.lmbda*v_y_dynamics+(1-self.lmbda)*v_y_kinematics   
+        return self.switch*v_y_dynamics+(1-self.switch)*v_y_kinematics
+        
     
-    def psi_dot_dynamics(self):                
-        F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/self.v_x 
-        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/self.v_x)   
-        psi_dot_dynamics = 1/self.Iz*(self.L_F*F_f_y*cs.cos(self.delta)-self.L_R*F_r_y)     
+    def psi_dot_dynamics(self):                     
+        F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/(self.v_x+1e-99)
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))           
+        psi_dot_dynamics = (1/self.Iz)*(self.L_F*F_f_y*cs.cos(self.delta)-self.L_R*F_r_y)
         psi_dot_kinematics = (self.u[1]*self.v_x+self.delta*self.u[0])/(self.L_R+self.L_F)        
-        return self.lmbda*psi_dot_dynamics+(1-self.lmbda)*psi_dot_kinematics   
+        return self.switch*psi_dot_dynamics+(1-self.switch)*psi_dot_kinematics
+        
 
-    def delta_dynamics(self):
+    def delta_dynamics(self):        
         return self.u[1]
 
     def set_reference_state(self, x_target=None, u_target=None, curv_ref = None, cdist_ref = None):
@@ -387,9 +391,12 @@ class Fren_AD3DOptimizer:
         """
 
         if initial_state is None:
-            initial_state = [0.0] + [0.0]+ [0.0]+ [0.0] + [0.0] + [0.0] + [0.0]
-
+            initial_state = [0.0] + [0.0]+ [0.0]+ [0.0] + [0.0] + [0.0] + [0.0] + [0.0]
+        
         # Set initial state. Add gp state if needed
+        # self.lmbda = cs.MX(cs.fmin(cs.fmax((initial_state[0,3]- self.blend_min)/(self.blend_max-self.blend_min),0.0),1.0))                                
+       
+
         x_init = initial_state
         x_init = np.stack(x_init)
         x_init = x_init.squeeze()
@@ -399,7 +406,18 @@ class Fren_AD3DOptimizer:
         self.acados_ocp_solver[use_model].set(0, 'lbx', x_init)
         self.acados_ocp_solver[use_model].set(0, 'ubx', x_init)
         
-                
+        vel_switch = min(max((initial_state[0,3]- self.blend_min)/(self.blend_max-self.blend_min),0.0),1.0)                              
+        
+        if initial_state[0,3] > self.blend_min:
+            print("Dynamics ~~ "+ str(vel_switch))
+        else:
+            print("Kinematics ~~ "+ str(vel_switch))
+
+        for j in range(0, self.N+1):
+            self.acados_ocp_solver[use_model].set(j, 'p', np.array([vel_switch]))
+            
+
+
         # Solve OCPacados_ocp_solver
         self.acados_ocp_solver[use_model].solve()
 

@@ -43,7 +43,8 @@ class Fren_AD3D:
         self.v_x = np.zeros((1,))
         self.v_y = np.zeros((1,))
         self.psi_dot = np.zeros((1,))
-        self.delta = np.zeros((1,))
+        self.delta = np.zeros((1,))        
+        
         
         #vehicle Mass in kg 
         self.mass = 2000
@@ -69,8 +70,8 @@ class Fren_AD3D:
         self.steering_max = 0.52
         self.steering_rate_min = -2 # rate of steering angle [rad/s]
         self.steering_rate_max = 2 # rate of steering angle [rad/s]
-        self.acc_min = -20
-        self.acc_max = 20
+        self.acc_min = -10
+        self.acc_max = 3
         
 
         self.noisy_input = False
@@ -94,7 +95,8 @@ class Fren_AD3D:
             self.v_x = kwargs["v_x"]            
             self.v_y = kwargs["v_y"]           
             self.psi_dot = kwargs["psi_dot"]           
-            self.delta = kwargs["delta"]            
+            self.delta = kwargs["delta"]                        
+            
 
 
     def get_state(self, stacked=False):

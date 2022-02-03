@@ -141,6 +141,15 @@ int main()
     double u0[NU];
     u0[0] = 0.0;
     u0[1] = 0.0;
+    // set parameters
+    double p[NP];
+    p[0] = 0;
+
+    for (int ii = 0; ii <= N; ii++)
+    {
+        sim_car_acados_update_params(acados_ocp_capsule, ii, p, NP);
+    }
+  
 
     // prepare evaluation
     int NTIMINGS = 1;

@@ -56,7 +56,7 @@ class Fren_ROSGPMPC:
                 "terminal_cost": False
             }
                              # s,  e_y,  e_psi, v_x, v_y, psi_dot, delta
-        q_diagonal = np.array([0.0, 10.0, 10.0, 10.0, 0.0, 1.0, 0.1 ])
+        q_diagonal = np.array([0.0, 10.0, 10.0, 10.0, 0.0, 1.0, 0.1])
                              # accl, delta_dot
         r_diagonal = np.array([1.0, 1.0])        
 

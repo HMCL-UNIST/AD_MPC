@@ -131,7 +131,8 @@ class GPMPCWrapper:
         self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
         self.waypoint_sub = rospy.Subscriber(waypoint_topic, Lane, self.waypoint_callback)
         self.odom_sub = rospy.Subscriber(sim_odom_topic, Odometry, self.odom_callback)
-        
+        self.blend_min = 3
+        self.blend_max = 5
 
         rate = rospy.Rate(1)
      
@@ -193,7 +194,7 @@ class GPMPCWrapper:
                 self.predicted_trj_visualize(x_opt)
             ####################################
             self.optimization_dt += time.time() - tic
-            print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
+            # print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
             control_msg = next_control.drive                                 
             control_msg.steering_angle = max(min(self.steering_max, next_control.drive.steering_angle_velocity*0.1 + self.steering), self.steering_min)                        
@@ -347,6 +348,7 @@ class GPMPCWrapper:
         self.v_x = msg.twist.twist.linear.x 
         self.v_y = msg.twist.twist.linear.y
         self.psi_dot = msg.twist.twist.angular.z
+                
 
     def pose_callback(self, msg):
         """                
@@ -375,7 +377,7 @@ class GPMPCWrapper:
         v_x = [self.v_x]
         v_y = [self.v_y]
         psi_dot = [self.psi_dot]        
-        steering = [self.steering]
+        steering = [self.steering]        
         
         self.x = s0+e_y+e_psi+v_x+v_y+psi_dot+steering
 
@@ -395,7 +397,8 @@ class GPMPCWrapper:
             psi_ref = waypoint_dict['psi_ref']
             vel_ref = waypoint_dict['v_ref']  
             curv_ref = waypoint_dict['curv_ref']    
-            cdist_ref = waypoint_dict['cdist_ref']                                               
+            cdist_ref = waypoint_dict['cdist_ref'] 
+                                                          
             # else:
             #     rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
 
