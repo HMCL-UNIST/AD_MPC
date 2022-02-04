@@ -147,8 +147,8 @@ class AD3DOptimizer:
             # ocp.cost.W_e = np.diag(q_cost)
             ocp.cost.W_e = np.diag(q_cost)*1e-2
             # ocp.cost.W_0 =  np.diag(q_cost)*1e2
-            terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
-            ocp.cost.W_e *= terminal_cost
+            # terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
+            # ocp.cost.W_e *= terminal_cost
 
             ocp.cost.Vx = np.zeros((ny, nx))
             ocp.cost.Vx[:nx, :nx] = np.eye(nx)
@@ -191,7 +191,7 @@ class AD3DOptimizer:
             # ocp.constraints.lsbx = np.zeros((nsx,))
             # ocp.constraints.usbx = np.zeros((nsx,))
 
-            ocp.constraints.idxsbu = np.array([0])
+            ocp.constraints.idxsbu = np.array([1])
             # ocp.constraints.lsbu = np.zeros((nsu,))
             # ocp.constraints.usbu = np.zeros((nsu,))
             # Solver options
@@ -405,8 +405,7 @@ class AD3DOptimizer:
         
         for j in range(self.N):
             ref = stacked_x_target[j, :]
-            ref = np.concatenate((ref, self.u_target[j, :]))          
-            print("ref = "+ str(ref[2]))  
+            ref = np.concatenate((ref, self.u_target[j, :]))                      
             if self.x_init[2] < 0:                
                 if self.x_init[2]+math.pi < ref[2]: 
                     ref[2] = ref[2]-2*math.pi       

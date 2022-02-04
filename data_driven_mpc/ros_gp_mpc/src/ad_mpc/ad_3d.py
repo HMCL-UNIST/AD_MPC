@@ -56,8 +56,8 @@ class AD3D:
                 
         #Cornering Stiffness for single wheel(N/rad) 
         # Cx = total load * weight distribution on each wheel * g(Kg to Newton) * 16.5%(approximatio) * 57.3 (1/degree to radian) 
-        self.Cf = self.f_mass*0.5*9.81*0.36*180/3.14195 
-        self.Cr =  self.r_mass*0.5*9.81*0.36*180/3.14195 
+        self.Cf = self.f_mass*0.5*9.81*0.165*180/3.14195 
+        self.Cr =  self.r_mass*0.5*9.81*0.165*180/3.14195 
 
         # blend velocity  for mixing dynamical and kinamatical model
         self.blend_max = 5
@@ -65,8 +65,8 @@ class AD3D:
         # Input constraints        
         self.steering_min = -0.52
         self.steering_max = 0.52
-        self.steering_rate_min = -2 # rate of steering angle [rad/s]
-        self.steering_rate_max = 2 # rate of steering angle [rad/s]
+        self.steering_rate_min = -3 # rate of steering angle [rad/s]
+        self.steering_rate_max = 3 # rate of steering angle [rad/s]
         self.acc_min = -10
         self.acc_max = 5
 

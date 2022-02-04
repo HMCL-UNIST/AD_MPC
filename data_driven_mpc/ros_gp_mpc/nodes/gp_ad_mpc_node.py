@@ -198,14 +198,12 @@ class GPMPCWrapper:
             self.optimization_dt += time.time() - tic
             # print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
-            control_msg = next_control.drive                                                         
-            control_msg.steering_angle = next_control.drive.steering_angle_velocity*0.1 + self.steering
-            # control_msg.steering_angle = next_control.drive.steering_angle_velocity*0.1 + self.steering            
+            control_msg = next_control.drive                                                                     
+            control_msg.steering_angle = max(min(self.steering_max, next_control.drive.steering_angle_velocity*0.1 + self.steering), self.steering_min)                        
             tt_steering = Float64()
             tt_steering.data = -1*control_msg.steering_angle            
             
-            self.steering_pub.publish(tt_steering)
-            # control_msg.acceleration = 0.0 
+            self.steering_pub.publish(tt_steering)            
             self.control_pub.publish(control_msg)            
             
 
@@ -373,7 +371,7 @@ class GPMPCWrapper:
         self.cur_z = msg.pose.position.z                
         cur_euler = quaternion_to_euler([msg.pose.orientation.w,msg.pose.orientation.x,msg.pose.orientation.y,msg.pose.orientation.z])            
         self.cur_yaw = wrap_to_pi(cur_euler[2])
-        print("cur_yaw = "+ str(self.cur_yaw*180/3.14195))
+        
         
         pose = [msg.pose.position.x, msg.pose.position.y]        
        
