@@ -162,16 +162,16 @@ class GPMPCWrapper:
         dt = odom.header.stamp.to_time() - self.last_update_time
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
-        if self.end_of_goal or len(self.x_ref) < self.n_mpc_nodes:
+        if self.end_of_goal or len(x_ref) < self.n_mpc_nodes:
             ref = [x_ref[-1], y_ref[-1], psi_ref[-1], 0.0, 0.0, 0.0, 0.0]
             u_ref = [0.0, 0.0]   
             terminal_point = True               
         else:        
-            ref = np.zeros([7,len(vel_ref)])
-            ref[0,:] = x_ref
-            ref[1,:] = y_ref
-            ref[2,:] = psi_ref
-            ref[3,:] = vel_ref
+            ref = np.zeros([7,len(x_ref)])
+            ref[0] = x_ref
+            ref[1] = y_ref
+            ref[2] = psi_ref
+            ref[3] = vel_ref
             ref = ref.transpose()
             u_ref = np.zeros((len(vel_ref)-1,2))
             terminal_point = False
@@ -364,7 +364,10 @@ class GPMPCWrapper:
     def pose_callback(self, msg):
         """                
         :type msg: PoseStamped
-        """        
+        """      
+        if self.velocity is None or not self.odom_available or not self.waypoint_available:
+            return        
+
         self.cur_x = msg.pose.position.x
         self.cur_y = msg.pose.position.y
         self.cur_z = msg.pose.position.z                
@@ -374,8 +377,8 @@ class GPMPCWrapper:
         pose = [msg.pose.position.x, msg.pose.position.y]        
        
         
-        p_x = [msg.pose.position.x]
-        p_y = [msg.pose.position.y]
+        p_x = [self.cur_x]
+        p_y = [self.cur_y]
         psi = [self.cur_yaw] 
         v_x = [self.v_x]
         v_y = [self.v_y]
@@ -383,9 +386,6 @@ class GPMPCWrapper:
         steering = [self.steering]
          
 
-        if self.velocity is None or not self.odom_available or not self.waypoint_available:
-            return        
-                
         
         self.x = p_x+p_y+psi+v_x+v_y+psi_dot+steering
         
@@ -396,24 +396,24 @@ class GPMPCWrapper:
             # reset the reference traj 
             if not self.waypoint_available:
                 return
-            if len(self.x_ref) > self.n_mpc_nodes :                
-                waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
+            # if len(self.x_ref) > self.n_mpc_nodes :                
+            waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
             
             # if len(self.x_ref) > self.n_mpc_nodes :   
-                x_ref    = waypoint_dict['x_ref']
-                y_ref    = waypoint_dict['y_ref']
-                psi_ref = waypoint_dict['psi_ref']
-            
-                vel_ref = waypoint_dict['v_ref']                  
+            x_ref    = waypoint_dict['x_ref']
+            y_ref    = waypoint_dict['y_ref']
+            psi_ref = waypoint_dict['psi_ref']
+        
+            vel_ref = waypoint_dict['v_ref']                  
                                                           
             # else:
             #     rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
 
-            elif len(self.x_ref) <= self.n_mpc_nodes :
-                x_ref   = self.x_ref
-                y_ref   = self.y_ref
-                psi_ref = self.psi_ref
-                vel_ref = self.vel_ref   
+            # elif len(self.x_ref) <= self.n_mpc_nodes :
+            #     x_ref   = self.x_ref
+            #     y_ref   = self.y_ref
+            #     psi_ref = self.psi_ref
+            #     vel_ref = self.vel_ref   
                      
                 
             self.waypoint_visualize(x_ref,y_ref,psi_ref)

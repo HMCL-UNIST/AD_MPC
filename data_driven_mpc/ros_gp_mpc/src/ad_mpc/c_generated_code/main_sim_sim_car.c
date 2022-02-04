@@ -70,12 +70,18 @@ int main()
     x_current[1] = 0.0;
     x_current[2] = 0.0;
     x_current[3] = 0.0;
+    x_current[4] = 0.0;
+    x_current[5] = 0.0;
+    x_current[6] = 0.0;
 
   
     x_current[0] = 0;
     x_current[1] = 0;
     x_current[2] = 0;
     x_current[3] = 0;
+    x_current[4] = 0;
+    x_current[5] = 0;
+    x_current[6] = 0;
     
   
 
@@ -84,6 +90,12 @@ int main()
     double u0[NU];
     u0[0] = 0.0;
     u0[1] = 0.0;
+    // set parameters
+    double p[NP];
+    p[0] = 0;
+
+    sim_car_acados_sim_update_params(capsule, p, NP);
+  
 
     int n_sim_steps = 3;
     // solve ocp in loop

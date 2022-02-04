@@ -56,12 +56,12 @@ class AD3D:
                 
         #Cornering Stiffness for single wheel(N/rad) 
         # Cx = total load * weight distribution on each wheel * g(Kg to Newton) * 16.5%(approximatio) * 57.3 (1/degree to radian) 
-        self.Cf = self.f_mass*0.5*9.81*0.35*180/3.14195 
-        self.Cr =  self.r_mass*0.5*9.81*0.35*180/3.14195 
+        self.Cf = self.f_mass*0.5*9.81*0.36*180/3.14195 
+        self.Cr =  self.r_mass*0.5*9.81*0.36*180/3.14195 
 
         # blend velocity  for mixing dynamical and kinamatical model
-        self.blend_max = 50
-        self.blend_min = 30
+        self.blend_max = 5
+        self.blend_min = 3
         # Input constraints        
         self.steering_min = -0.52
         self.steering_max = 0.52
@@ -69,10 +69,6 @@ class AD3D:
         self.steering_rate_max = 2 # rate of steering angle [rad/s]
         self.acc_min = -10
         self.acc_max = 5
-
-        # state constraints
-        self.e_y_min = -2
-        self.e_y_max = 2
 
         self.noisy_input = False
         self.noisy = noisy
@@ -87,7 +83,7 @@ class AD3D:
     def set_state(self, *args, **kwargs):
         if len(args) != 0:
             assert len(args) == 1 and len(args[0]) == 7
-            self.p_x[0], self.p_y[1], self.psi[0], self.v_x[0], self.v_y[0], self.psi_dot[0], self.delta[0] = args[0]            
+            self.p_x[0], self.p_y[0], self.psi[0], self.v_x[0], self.v_y[0], self.psi_dot[0], self.delta[0] = args[0]            
         else:
             self.p_x = kwargs["p_x"]
             self.p_y = kwargs["p_y"]
@@ -101,7 +97,7 @@ class AD3D:
     def get_state(self, stacked=False):
         
         if stacked:
-            return [self.p_x[0], self.p_y[1], self.psi[0], self.v_x[0], self.v_y[0], self.psi_dot[0], self.delta[0]] 
+            return [self.p_x[0], self.p_y[0], self.psi[0], self.v_x[0], self.v_y[0], self.psi_dot[0], self.delta[0]] 
         return [self.p_x, self.p_y, self.psi, self.v_x, self.v_y, self.psi_dot, self.delta]
     
     def get_control(self, noisy=False):

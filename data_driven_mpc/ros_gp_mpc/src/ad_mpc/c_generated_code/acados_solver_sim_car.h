@@ -37,15 +37,15 @@
 #include "acados_c/ocp_nlp_interface.h"
 #include "acados_c/external_function_interface.h"
 
-#define SIM_CAR_NX     4
+#define SIM_CAR_NX     7
 #define SIM_CAR_NZ     0
 #define SIM_CAR_NU     2
-#define SIM_CAR_NP     0
-#define SIM_CAR_NBX    0
-#define SIM_CAR_NBX0   4
+#define SIM_CAR_NP     1
+#define SIM_CAR_NBX    1
+#define SIM_CAR_NBX0   7
 #define SIM_CAR_NBU    2
 #define SIM_CAR_NSBX   0
-#define SIM_CAR_NSBU   0
+#define SIM_CAR_NSBU   1
 #define SIM_CAR_NSH    0
 #define SIM_CAR_NSG    0
 #define SIM_CAR_NSPHI  0
@@ -53,15 +53,15 @@
 #define SIM_CAR_NSGN   0
 #define SIM_CAR_NSPHIN 0
 #define SIM_CAR_NSBXN  0
-#define SIM_CAR_NS     0
+#define SIM_CAR_NS     1
 #define SIM_CAR_NSN    0
 #define SIM_CAR_NG     0
 #define SIM_CAR_NBXN   0
 #define SIM_CAR_NGN    0
-#define SIM_CAR_NY0    6
-#define SIM_CAR_NY     6
-#define SIM_CAR_NYN    4
-#define SIM_CAR_N      20
+#define SIM_CAR_NY0    9
+#define SIM_CAR_NY     9
+#define SIM_CAR_NYN    7
+#define SIM_CAR_N      40
 #define SIM_CAR_NH     0
 #define SIM_CAR_NPHI   0
 #define SIM_CAR_NHN    0
