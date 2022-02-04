@@ -223,8 +223,8 @@ static const casadi_int casadi_s4[11] = {7, 1, 0, 7, 0, 1, 2, 3, 4, 5, 6};
 static const casadi_int casadi_s5[6] = {2, 1, 0, 2, 0, 1};
 static const casadi_int casadi_s6[5] = {1, 1, 0, 1, 0};
 
-static const casadi_real casadi_c0[8] = {1.0000000000000008e-06, 1.0000000000000006e-06, 1.0000000000000008e-06, 1.0000000000000014e-06, 1.0000000000000014e-06, 1.0000000000000002e-06, 1.0000000000000006e-06, 1.0000000000000006e-06};
-static const casadi_real casadi_c1[12] = {0., 0., 0., 0., 2., 3., 4., 5., 7., 7., 7., 7.};
+static const casadi_real casadi_c0[8] = {-2.0000000000000012e-01, -2.0000000000000007e-01, -2.0000000000000007e-01, -2.0000000000000007e-01, -2.0000000000000015e-01, -1.9999999999999726e-01, -2.0000000000014867e-01, -2.0000000000000004e-01};
+static const casadi_real casadi_c1[12] = {0., 0., 0., 0., 2., 3., 4., 5., 100., 100., 100., 100.};
 
 /* kapparef_s:(x)->(f) */
 static int casadi_f1(const casadi_real** arg, casadi_real** res, casadi_int* iw, casadi_real* w, int mem) {

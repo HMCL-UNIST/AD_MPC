@@ -16,12 +16,12 @@ def compute_curvature(cdists, psis):
 
 	curv_raw = diff_psis / np.maximum(diff_dists, 0.1) # use diff_dists where greater than 10 cm	
 	curv_raw = np.insert(curv_raw, len(curv_raw), curv_raw[-1]) # curvature at last waypoint	
-	if len(curv_raw) > 33:
-		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw) # curvature filter suggested by Jinkkwon Kim.
-	else:
-		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=min(len(cdists),3))		
+	# if len(curv_raw) > 33:
+	# 	curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw) # curvature filter suggested by Jinkkwon Kim.
+	# else:
+	# 	curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=min(len(cdists),3))		
 	# Curvature Filtering: (https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html)
-	
+	curv_filt = curv_raw 
 	return curv_filt
 	
 

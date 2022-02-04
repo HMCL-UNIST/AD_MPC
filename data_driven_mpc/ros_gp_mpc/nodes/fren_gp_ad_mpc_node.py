@@ -168,7 +168,7 @@ class GPMPCWrapper:
             terminal_point = True               
         else:        
             ref = np.zeros([7,len(vel_ref)])
-            ref[3] = vel_ref
+            ref[3,:] = vel_ref
             ref = ref.transpose()
             u_ref = np.zeros((len(vel_ref)-1,2))
             terminal_point = False
@@ -224,12 +224,15 @@ class GPMPCWrapper:
         init_velocity = math.sqrt(x_opt[0,3]**2+x_opt[0,4]**2)
         # x, y , yaw, vx(local frame), vy(local frame)        
         z_mpc[0,:] = [self.cur_x, self.cur_y,self.cur_yaw,init_velocity]        
-        
+        print("steering angel")
+        u_df = x_opt[0,6] 
         for ind in range(0,self.n_mpc_nodes):
             x, y, p, v = z_mpc[ind, :]
             u_acc = w_opt[2*(ind)]
             
-            u_df = x_opt[ind,6]            
+            u_df = w_opt[2*(ind)+1]*0.05+u_df
+            
+            print(u_df)           
             
             beta = np.arctan( self.ad.L_R / (self.ad.L_F + self.ad.L_R) * np.tan(u_df))
             x_ = x + self.dt * (v * np.cos(p + beta))

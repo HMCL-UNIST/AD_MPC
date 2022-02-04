@@ -51,9 +51,7 @@ class Fren_AD3DOptimizer:
         
 
         self.ad = ad
-        s_init = [0,1,2,3,4,5,6,7]
-        self.curv_ref = [1e-6,1e-6,1e-6,1e-6,1e-6,1e-6,1e-6,1e-6]
-        self.kapparef_s = interpolant("kapparef_s", "bspline", [s_init], self.curv_ref) 
+        
                 
         #vehicle Mass in kg 
         self.mass = ad.mass                
@@ -90,6 +88,9 @@ class Fren_AD3DOptimizer:
         self.delta = cs.MX.sym('delta',1) 
         self.switch = cs.MX.sym('switch',1) 
         
+        s_init = [0,1,2,3,4,5,6,100]
+        self.curv_ref = [-0.2,-0.2,-0.2,-0.2,-0.2,-0.2,-0.2,-0.2]
+        self.kapparef_s = interpolant("kapparef_s", "bspline", [s_init], self.curv_ref) 
 
         # Full state vector (4-dimensional)
         self.x = cs.vertcat(self.s, self.e_y,self.e_psi, self.v_x, self.v_y, self.psi_dot, self.delta)
@@ -444,7 +445,7 @@ class Fren_AD3DOptimizer:
             print("Kinematics ~~ "+ str(vel_switch))
 
         for j in range(0, self.N+1):
-            self.acados_ocp_solver[use_model].set(j, 'p', np.array([vel_switch]))
+            self.acados_ocp_solver[use_model].set(j, 'p', np.array([vel_switch, self.kapparef_s]))
             
 
 
