@@ -118,7 +118,6 @@ class RefTrajectory():
 		#     WARNING: this function does not handle well the case where the car is far from the recorded path!
 		#     Ill-defined behavior/speed.
 		#     Could use the actual minimum distance and add appropriate logic to handle this edge case.
-
 		
 			# Given a velocity reference, use the cumulative distance for interpolation.
 		start_dist = self.trajectory[closest_index, self.access_map['cdist']]			
@@ -151,5 +150,22 @@ class RefTrajectory():
 		waypoint_dict['stop'] = False
 		if waypoint_dict['cdist_ref'][-1] == self.trajectory[:, self.access_map['cdist']][-1]:
 			waypoint_dict['stop'] = True # reached the end of the trajectory, so give a stop command.
+		
+		
+		
+		points_from_init = np.linspace(X_init,waypoint_dict['x_ref'][0],5)		
+		waypoint_dict['x_ref'] = np.hstack([points_from_init, waypoint_dict['x_ref']])
+
+		points_from_init = np.linspace(Y_init,waypoint_dict['y_ref'][0],5)		
+		waypoint_dict['y_ref'] = np.hstack([points_from_init, waypoint_dict['y_ref']])
+
+		points_from_init = np.linspace(psi_init,waypoint_dict['psi_ref'][0],5)		
+		waypoint_dict['psi_ref'] = np.hstack([points_from_init, waypoint_dict['psi_ref']])
+
+		points_from_init = np.ones(5)*waypoint_dict['v_ref'][0]		
+		waypoint_dict['v_ref'] = np.hstack([points_from_init, waypoint_dict['v_ref']])
+
+
+			
 
 		return waypoint_dict # keys ['s0', 'e_y0, 'e_psi0', 'x_ref', 'y_ref', 'psi_ref', 'cdist_ref', 'curv_ref', 'v_ref', 'stop']

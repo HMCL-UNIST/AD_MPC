@@ -39,9 +39,9 @@ class AD3DOptimizer:
 
                             # p_x,  p_y, psi, v_x, v_y, psi_dot, delta
         if q_cost is None:
-            q_cost = np.array([1.0, 1.0, 100., 1.0, 1.0, 10.0, 0.0])
+            q_cost = np.array([100, 100, 500, 0.0, 0.0, 1.0, 1])
         if r_cost is None:
-            r_cost = np.array([1.0, 10.0])             
+            r_cost = np.array([1.0, 100.0])             
 
         self.T = t_horizon  # Time horizon
         self.N = n_nodes  # number of control nodes within horizon
@@ -144,9 +144,9 @@ class AD3DOptimizer:
             ocp.cost.cost_type_e = 'LINEAR_LS'
 
             ocp.cost.W = np.diag(np.concatenate((q_cost, r_cost)))
-            ocp.cost.W_e = np.diag(q_cost)
-            # ocp.cost.W_e = np.diag(q_cost)*1e-2
-            # ocp.cost.W_0 =  np.diag(q_cost)
+            # ocp.cost.W_e = np.diag(q_cost)
+            ocp.cost.W_e = np.diag(q_cost)*1e-2
+            # ocp.cost.W_0 =  np.diag(q_cost)*1e2
             terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
             ocp.cost.W_e *= terminal_cost
 
@@ -405,10 +405,11 @@ class AD3DOptimizer:
         
         for j in range(self.N):
             ref = stacked_x_target[j, :]
-            ref = np.concatenate((ref, self.u_target[j, :]))            
+            ref = np.concatenate((ref, self.u_target[j, :]))          
+            print("ref = "+ str(ref[2]))  
             if self.x_init[2] < 0:                
                 if self.x_init[2]+math.pi < ref[2]: 
-                    ref[2] = ref[2]-2*math.pi
+                    ref[2] = ref[2]-2*math.pi       
             elif self.x_init[2] > 0:                
                 if self.x_init[2]-math.pi > ref[2]: 
                     ref[2] = ref[2]+2*math.pi               

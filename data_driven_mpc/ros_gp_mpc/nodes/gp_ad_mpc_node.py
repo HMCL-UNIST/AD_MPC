@@ -373,6 +373,7 @@ class GPMPCWrapper:
         self.cur_z = msg.pose.position.z                
         cur_euler = quaternion_to_euler([msg.pose.orientation.w,msg.pose.orientation.x,msg.pose.orientation.y,msg.pose.orientation.z])            
         self.cur_yaw = wrap_to_pi(cur_euler[2])
+        print("cur_yaw = "+ str(self.cur_yaw*180/3.14195))
         
         pose = [msg.pose.position.x, msg.pose.position.y]        
        
@@ -400,12 +401,13 @@ class GPMPCWrapper:
             waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
             
             # if len(self.x_ref) > self.n_mpc_nodes :   
-            x_ref    = waypoint_dict['x_ref']
+            x_ref    = waypoint_dict['x_ref']            
             y_ref    = waypoint_dict['y_ref']
             psi_ref = waypoint_dict['psi_ref']
         
             vel_ref = waypoint_dict['v_ref']                  
-                                                          
+
+                                                       
             # else:
             #     rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
 
