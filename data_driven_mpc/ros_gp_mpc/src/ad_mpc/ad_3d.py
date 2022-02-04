@@ -41,7 +41,7 @@ class AD3D:
         self.steering_min = -0.52
         self.steering_max = 0.52
         self.acc_min = -10
-        self.acc_max = 10
+        self.acc_max = 3
         self.L_R = 1.4
         self.L_F = 1.4
 

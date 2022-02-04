@@ -77,7 +77,7 @@ int sim_car_acados_sim_create(sim_solver_capsule * capsule)
     bool tmp_bool;
 
     
-    double Tsim = 0.05;
+    double Tsim = 0.1;
 
     
     // explicit ode
@@ -156,18 +156,11 @@ int sim_car_acados_sim_create(sim_solver_capsule * capsule)
     capsule->acados_sim_solver = sim_car_sim_solver;
 
 
-    /* initialize parameter values */
-    double* p = calloc(np, sizeof(double));
-    
-
-    sim_car_acados_sim_update_params(capsule, p, np);
-    free(p);
-
 
     /* initialize input */
     // x
-    double x0[7];
-    for (int ii = 0; ii < 7; ii++)
+    double x0[4];
+    for (int ii = 0; ii < 4; ii++)
         x0[ii] = 0.0;
 
     sim_in_set(sim_car_sim_config, sim_car_sim_dims,
@@ -183,11 +176,11 @@ int sim_car_acados_sim_create(sim_solver_capsule * capsule)
                sim_car_sim_in, "u", u0);
 
     // S_forw
-    double S_forw[63];
-    for (int ii = 0; ii < 63; ii++)
+    double S_forw[24];
+    for (int ii = 0; ii < 24; ii++)
         S_forw[ii] = 0.0;
-    for (int ii = 0; ii < 7; ii++)
-        S_forw[ii + ii * 7 ] = 1.0;
+    for (int ii = 0; ii < 4; ii++)
+        S_forw[ii + ii * 4 ] = 1.0;
 
 
     sim_in_set(sim_car_sim_config, sim_car_sim_dims,

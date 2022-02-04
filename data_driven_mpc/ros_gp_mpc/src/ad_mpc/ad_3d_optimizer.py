@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-
+import math
 import os
 import sys
 import shutil
@@ -39,7 +39,7 @@ class AD3DOptimizer:
 
         # Weighted squared error loss function q = (p_xyz, a_xyz, v_xyz, r_xyz), r = (u1, u2, u3, u4)
         if q_cost is None:
-            q_cost = np.array([1.0, 1.0, 10., 5.0])
+            q_cost = np.array([10.0, 10.0, 100., 5.0])
         if r_cost is None:
             r_cost = np.array([10.0, 100.0])             
 
@@ -62,7 +62,7 @@ class AD3DOptimizer:
         # Full state vector (4-dimensional)
         self.x = cs.vertcat(self.p, self.s, self.v)
         self.state_dim = 4
-
+        self.x_init = np.zeros(4)
         # Control input vector
         u1 = cs.MX.sym('u1')
         u2 = cs.MX.sym('u2')
@@ -286,17 +286,27 @@ class AD3DOptimizer:
         # tmp = x_target[:,2] 
         # np.place(tmp,tmp < -3, tmp+2*np.pi)
         # x_target[:,2] = tmp
-        self.target = copy(x_target)       
+        self.target = copy(x_target)      
+        self.u_target = copy(u_target) 
         # print(x_target)        
-        stacked_x_target = x_target 
+        # stacked_x_target = x_target 
         
         
-        for j in range(self.N):
-            ref = stacked_x_target[j, :]
-            ref = np.concatenate((ref, u_target[j, :]))
-            self.acados_ocp_solver[gp_ind].set(j, "yref", ref)
-        # the last MPC node has only a state reference but no input reference
-        self.acados_ocp_solver[gp_ind].set(self.N, "yref", stacked_x_target[self.N, :])
+        # for j in range(self.N):
+        #     ref = stacked_x_target[j, :]
+        #     ref = np.concatenate((ref, u_target[j, :]))
+            
+        #     if self.x_init[2] < 0:                
+        #         if self.x_init[2]+math.pi < ref[2]: 
+        #             ref[2] = ref[2]-2*math.pi
+        #     elif self.x_init[2] > 0:                
+        #         if self.x_init[2]-math.pi > ref[2]: 
+        #             ref[2] = ref[2]+2*math.pi               
+
+        #     self.acados_ocp_solver[gp_ind].set(j, "yref", ref)
+        # # the last MPC node has only a state reference but no input reference
+        # self.acados_ocp_solver[gp_ind].set(self.N, "yref", stacked_x_target[self.N, :])
+
         return gp_ind
 
     
@@ -319,6 +329,24 @@ class AD3DOptimizer:
         x_init = initial_state
         x_init = np.stack(x_init)
         x_init = x_init.squeeze()
+        self.x_init = x_init 
+
+        stacked_x_target = self.target 
+        
+        
+        for j in range(self.N):
+            ref = stacked_x_target[j, :]
+            ref = np.concatenate((ref, self.u_target[j, :]))            
+            if self.x_init[2] < 0:                
+                if self.x_init[2]+math.pi < ref[2]: 
+                    ref[2] = ref[2]-2*math.pi
+            elif self.x_init[2] > 0:                
+                if self.x_init[2]-math.pi > ref[2]: 
+                    ref[2] = ref[2]+2*math.pi               
+
+            self.acados_ocp_solver[use_model].set(j, "yref", ref)
+        # the last MPC node has only a state reference but no input reference
+        self.acados_ocp_solver[use_model].set(self.N, "yref", stacked_x_target[self.N, :])
 
         # Set initial condition, equality constraint
         self.acados_ocp_solver[use_model].set(0, 'lbx', x_init)

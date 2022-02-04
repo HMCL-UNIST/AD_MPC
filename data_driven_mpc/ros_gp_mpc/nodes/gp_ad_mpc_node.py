@@ -18,14 +18,16 @@ import rospy
 import threading
 import numpy as np
 import pandas as pd
+import math 
 from tqdm import tqdm
-from std_msgs.msg import Bool, Empty
+from std_msgs.msg import Bool, Empty, Float64
+from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
 from autoware_msgs.msg import Lane, Waypoint
 from carla_msgs.msg import CarlaEgoVehicleStatus
 from ad_mpc.create_ros_ad_mpc import ROSGPMPC
-
+from ad_mpc.ad_3d import AD3D
 from utils.utils import jsonify, interpol_mse, quaternion_state_mse, load_pickled_models, v_dot_q, \
     separate_variables
 from utils.visualization import trajectory_tracking_results, mse_tracking_experiment_plot, \
@@ -38,16 +40,19 @@ from ad_mpc.ref_traj import RefTrajectory
 
 from visualization_msgs.msg import MarkerArray, Marker
 
+def clamp(n, minn, maxn):
+    return max(min(maxn, n), minn)
 
 class GPMPCWrapper:
     def __init__(self,environment="carla"):
-
+        
+        self.ad = AD3D(noisy=False, noisy_input= False)
         # Control at 50 (sim) or 60 (real) hz. Use time horizon=1 and 10 nodes
         self.n_mpc_nodes = rospy.get_param('~n_nodes', default=20.0)
         self.t_horizon = rospy.get_param('~t_horizon', default=2.0)
         self.traj_resample_vel = rospy.get_param('~traj_resample_vel', default=True)        
-        self.control_freq_factor = rospy.get_param('~control_freq_factor', default=5 if environment == "carla" else 6)
-        
+        self.control_freq_factor = rospy.get_param('~control_freq_factor', default=5 if environment == "carla" else 5)
+        self.dt = self.t_horizon / self.n_mpc_nodes
         self.opt_dt = self.t_horizon / (self.n_mpc_nodes * self.control_freq_factor)
 #################################################################        
         # Initialize GP MPC for point tracking
@@ -56,6 +61,9 @@ class GPMPCWrapper:
         # Last state obtained from odometry
         self.x = None
         self.velocity = None
+        self.steering = None
+        self.steering_max = 0.5
+        self.steering_min = -1*self.steering_max
         self.environment = environment
         # Elapsed time between two recordings
         self.last_update_time = time.time()
@@ -65,7 +73,9 @@ class GPMPCWrapper:
         self.last_u_ref = None
 
         self.end_of_goal = False
-    
+
+        self.odom_available = False  
+        
         # Reference trajectory variables
         self.x_ref = None
         self.t_ref = None
@@ -102,6 +112,7 @@ class GPMPCWrapper:
             vehicle_status_topic = "/carla/ego_vehicle/vehicle_status"
             control_topic = "/carla/ego_vehicle/ackermann_cmd"            
             waypoint_topic = "/final_waypoints"
+            sim_odom_topic = "/carla/ego_vehicle/odometry"
         else:
             # Real world setup
             pose_topic = "/ndt_pose"
@@ -115,13 +126,18 @@ class GPMPCWrapper:
         self.ref_puf_publisher = rospy.Publisher("/mpc_ref_trajectory", MarkerArray, queue_size=1)
         self.mpc_predicted_trj_publisher = rospy.Publisher("/mpc_pred_trajectory", MarkerArray, queue_size=1)
         self.final_ref_publisher = rospy.Publisher("/final_trajectory", MarkerArray, queue_size=1)
+        self.status_pub = rospy.Publisher(status_topic, Bool, queue_size=1)
+        self.steering_pub = rospy.Publisher("/mpc_steering", Float64, queue_size=1)
         # Subscribers
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_callback)
         self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
         self.waypoint_sub = rospy.Subscriber(waypoint_topic, Lane, self.waypoint_callback)
-        self.status_pub = rospy.Publisher(status_topic, Bool, queue_size=1)
+        self.odom_sub = rospy.Subscriber(sim_odom_topic, Odometry, self.odom_callback)
+        self.blend_min = 3
+        self.blend_max = 5
 
         rate = rospy.Rate(1)
+     
         while not rospy.is_shutdown():
             # Publish if MPC is busy with a current trajectory
             msg = Bool()
@@ -151,42 +167,46 @@ class GPMPCWrapper:
             u_ref = [0.0, 0.0]   
             terminal_point = True               
         else:        
-            ref = np.zeros([4,len(x_ref)])
-            ref[0] = x_ref
-            ref[1] = y_ref
-            ref[2] = psi_ref
-            ref[3] = vel_ref
+            ref = np.zeros([4,len(vel_ref)])
+            ref[0,:] = x_ref
+            ref[1,:] = y_ref
+            ref[2,:] = psi_ref
+            ref[3,:] = vel_ref
             ref = ref.transpose()
-            u_ref = np.zeros((len(x_ref)-1,2))
+            u_ref = np.zeros((len(vel_ref)-1,2))
             terminal_point = False
-            
-        
         
         # pose = np.array([self.x_ref,self.y_ref])
         # psi = np.array(self.psi_ref)
         # if self.velocity is None:
         #     return
         # vel = np.array(self.vel_ref)
-        # ref = [pose,psi,vel]
-        
+        # ref = [pose,psi,vel]        
         # ref_ = np.array([self.x_ref, self.y_ref, self.psi_ref, self.vel_ref])
         
-        
         model_data = self.gp_mpc.set_reference(ref,u_ref,terminal_point)
+        # model_data = self.gp_mpc.set_reference(ref,u_ref,curv_ref,cdist_ref,terminal_point)
     
         # Run MPC and publish control
         try:
             tic = time.time()
             next_control, w_opt, x_opt = self.gp_mpc.optimize(model_data)
             ####################################
-            if x_opt is not None:
+            if x_opt is not None:                
                 self.predicted_trj_visualize(x_opt)
             ####################################
             self.optimization_dt += time.time() - tic
-            print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
+            # print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
-            control_msg = next_control.drive
+            control_msg = next_control.drive                                                         
+            # control_msg.steering_angle = next_control.drive.steering_angle_velocity*0.1 + self.steering            
+            tt_steering = Float64()
+            tt_steering.data = -1*control_msg.steering_angle            
+            
+            self.steering_pub.publish(tt_steering)
+            # control_msg.acceleration = 0.0 
             self.control_pub.publish(control_msg)            
+            
 
         except KeyError:
             self.recording_warmup = True
@@ -197,10 +217,14 @@ class GPMPCWrapper:
         if w_opt is not None:            
             self.w_opt = w_opt            
 
+   
+
     def vehicle_status_callback(self,msg):
         if msg.velocity is None:
             return
         self.velocity = msg.velocity
+        self.steering = -msg.control.steer
+
         if self.vehicle_status_available is False:
             self.vehicle_status_available = True        
 
@@ -284,7 +308,7 @@ class GPMPCWrapper:
         """
         :type msg: autoware_msgs/Lane 
         """                
-        if len(msg.waypoints) < 5:
+        if len(msg.waypoints) < 3:
             self.end_of_goal = True
         else:
             self.end_of_goal = False
@@ -293,7 +317,7 @@ class GPMPCWrapper:
         if not self.waypoint_available:
             self.waypoint_available = True
         
-        if len(msg.waypoints) > 0:                         
+        if len(msg.waypoints) > 3:                         
             # received messages             
             # msg.waypoints = msg.waypoints[0:]
             self.x_ref = [msg.waypoints[i].pose.pose.position.x for i in range(len(msg.waypoints))]
@@ -302,9 +326,17 @@ class GPMPCWrapper:
             self.psi_ref = [wrap_to_pi(quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2]) for i in range(len(msg.waypoints))]                                    
             
             self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
+
+            # insert current position as the initial reference point  --> not good... 
+            # self.x_ref.insert(0,self.cur_x)
+            # self.y_ref.insert(0,self.cur_y)
+            # self.psi_ref.insert(0,self.cur_yaw)
+            # self.vel_ref.insert(0,self.velocity)
+
             # self.final_waypoint_visualize()
             # resample trajectory with respect to vel_ref 
             # if self.traj_resample_vel and len(self.x_ref) > 33:                        
+            
             self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
         else:
             rospy.loginfo("Waypoints are empty")    
@@ -320,7 +352,14 @@ class GPMPCWrapper:
         
         
         
-  
+    def odom_callback(self, msg):
+        if self.odom_available is False:
+            self.odom_available = True  
+        self.v_x = msg.twist.twist.linear.x 
+        self.v_y = msg.twist.twist.linear.y
+        self.psi_dot = msg.twist.twist.angular.z
+                
+
     def pose_callback(self, msg):
         """                
         :type msg: PoseStamped
@@ -332,40 +371,49 @@ class GPMPCWrapper:
         self.cur_yaw = wrap_to_pi(cur_euler[2])
         
         pose = [msg.pose.position.x, msg.pose.position.y]        
-        psi = [self.cur_yaw]
+        psi = [self.cur_yaw] 
+        
+         
 
-        waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
+        if self.velocity is None or not self.odom_available or not self.waypoint_available:
+            return        
 
-        if self.velocity is None:
-            return
         vel = [self.velocity]    
-        # self.x = pose+psi+vel        
-        s0 = [waypoint_dict['s0']]
-        e_y_psi = [waypoint_dict['e_y0'], waypoint_dict['e_psi0']]
-        vel = self.velocity
-        self.x = s0+e_y_psi+vel
-
+        # self.x = pose+psi+vel               
+        v_x = [self.v_x]
+        v_y = [self.v_y]
+        psi_dot = [self.psi_dot]        
+        steering = [self.steering]        
+        
+        # self.x = s0+e_y+e_psi+v_x+v_y+psi_dot+steering
+        self.x = pose+psi+vel
         try:
             # Update the state estimate of the AD
+
             self.gp_mpc.set_state(self.x)
             # reset the reference traj 
             if not self.waypoint_available:
                 return
+            if len(self.x_ref) > self.n_mpc_nodes :                
+                waypoint_dict = self.ref_gen.get_waypoints(pose[0], pose[1], psi[0])
             
-            
-            if len(self.x_ref) > self.n_mpc_nodes :   
+            # if len(self.x_ref) > self.n_mpc_nodes :   
                 x_ref    = waypoint_dict['x_ref']
                 y_ref    = waypoint_dict['y_ref']
                 psi_ref = waypoint_dict['psi_ref']
+            
                 vel_ref = waypoint_dict['v_ref']  
-                curv_ref = waypoint_dict['curv_ref']                                
-            else:
-                rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
-            # elif len(self.x_ref) <= self.n_mpc_nodes :
-            #     x_ref   = self.x_ref
-            #     y_ref   = self.y_ref
-            #     psi_ref = self.psi_ref
-            #     vel_ref = self.vel_ref   
+                curv_ref = waypoint_dict['curv_ref']    
+                cdist_ref = waypoint_dict['cdist_ref'] 
+                                                          
+            # else:
+            #     rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
+
+            elif len(self.x_ref) <= self.n_mpc_nodes :
+                x_ref   = self.x_ref
+                y_ref   = self.y_ref
+                psi_ref = self.psi_ref
+                vel_ref = self.vel_ref   
                      
                 
             self.waypoint_visualize(x_ref,y_ref,psi_ref)
@@ -393,7 +441,7 @@ class GPMPCWrapper:
                     
 
         def _thread_func():
-            self.run_mpc(msg,x_ref,y_ref,psi_ref,vel_ref,curv_ref)            
+            self.run_mpc(msg,x_ref,y_ref,psi_ref,vel_ref)            
         self.mpc_thread = threading.Thread(target=_thread_func(), args=(), daemon=True)
         self.mpc_thread.start()
         self.mpc_thread.join()
