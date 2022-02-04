@@ -325,7 +325,7 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     if (new_time_steps) {
         sim_car_acados_update_time_steps(capsule, N, new_time_steps);
     } else {// all time_steps are identical
-        double time_step = 0.1;
+        double time_step = 0.05;
         for (int i = 0; i < N; i++)
         {
             ocp_nlp_in_set(nlp_config, nlp_dims, nlp_in, i, "Ts", &time_step);
@@ -346,13 +346,14 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
 
     double* W_0 = calloc(NY0*NY0, sizeof(double));
     // change only the non-zero elements:
-    W_0[1+(NY0) * 1] = 10;
-    W_0[2+(NY0) * 2] = 10;
+    W_0[1+(NY0) * 1] = 100;
+    W_0[2+(NY0) * 2] = 500;
     W_0[3+(NY0) * 3] = 10;
+    W_0[4+(NY0) * 4] = 10;
     W_0[5+(NY0) * 5] = 1;
-    W_0[6+(NY0) * 6] = 0.1;
-    W_0[7+(NY0) * 7] = 1;
-    W_0[8+(NY0) * 8] = 1;
+    W_0[6+(NY0) * 6] = 1;
+    W_0[7+(NY0) * 7] = 0.1;
+    W_0[8+(NY0) * 8] = 5;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, 0, "W", W_0);
     free(W_0);
 
@@ -366,13 +367,14 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     double* W = calloc(NY*NY, sizeof(double));
     // change only the non-zero elements:
     
-    W[1+(NY) * 1] = 10;
-    W[2+(NY) * 2] = 10;
+    W[1+(NY) * 1] = 100;
+    W[2+(NY) * 2] = 500;
     W[3+(NY) * 3] = 10;
+    W[4+(NY) * 4] = 10;
     W[5+(NY) * 5] = 1;
-    W[6+(NY) * 6] = 0.1;
-    W[7+(NY) * 7] = 1;
-    W[8+(NY) * 8] = 1;
+    W[6+(NY) * 6] = 1;
+    W[7+(NY) * 7] = 0.1;
+    W[8+(NY) * 8] = 5;
 
     double* yref = calloc(NY, sizeof(double));
     // change only the non-zero elements:
@@ -443,6 +445,26 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
 
 
 
+    double* zlumem = calloc(4*NS, sizeof(double));
+    double* Zl = zlumem+NS*0;
+    double* Zu = zlumem+NS*1;
+    double* zl = zlumem+NS*2;
+    double* zu = zlumem+NS*3;
+    // change only the non-zero elements:
+    zl[0] = 100;
+    zl[1] = 100;
+    zu[0] = 100;
+    zu[1] = 100;
+
+    for (int i = 0; i < N; i++)
+    {
+        ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, i, "Zl", Zl);
+        ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, i, "Zu", Zu);
+        ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, i, "zl", zl);
+        ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, i, "zu", zu);
+    }
+    free(zlumem);
+
 
     // terminal cost
 
@@ -457,10 +479,11 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     // change only the non-zero elements:
     
     W_e[1+(NYN) * 1] = 1;
-    W_e[2+(NYN) * 2] = 1;
-    W_e[3+(NYN) * 3] = 1;
-    W_e[5+(NYN) * 5] = 0.1;
-    W_e[6+(NYN) * 6] = 0.010000000000000002;
+    W_e[2+(NYN) * 2] = 5;
+    W_e[3+(NYN) * 3] = 0.1;
+    W_e[4+(NYN) * 4] = 0.1;
+    W_e[5+(NYN) * 5] = 0.01;
+    W_e[6+(NYN) * 6] = 0.01;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, N, "W", W_e);
     free(W_e);
     double* Vx_e = calloc(NYN*NX, sizeof(double));
@@ -520,6 +543,29 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
 
     /* constraints that are the same for initial and intermediate */
 
+    // ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, 0, "idxsbx", idxsbx);
+    // ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, 0, "lsbx", lsbx);
+    // ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, 0, "usbx", usbx);
+
+    // soft bounds on x
+    int* idxsbx = malloc(NSBX * sizeof(int));
+    
+    idxsbx[0] = 1;
+
+    double* lusbx = calloc(2*NSBX, sizeof(double));
+    double* lsbx = lusbx;
+    double* usbx = lusbx + NSBX;
+    
+
+    for (int i = 1; i < N; i++)
+    {       
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, i, "idxsbx", idxsbx);
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, i, "lsbx", lsbx);
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, i, "usbx", usbx);
+    }
+    free(idxsbx);
+    free(lusbx);
+
 
 
     // u
@@ -532,7 +578,7 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     double* ubu = lubu + NBU;
     
     lbu[0] = -10;
-    ubu[0] = 3;
+    ubu[0] = 5;
     lbu[1] = -2;
     ubu[1] = 2;
 
@@ -547,6 +593,23 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
 
 
 
+    // set up soft bounds for u
+    int* idxsbu = malloc(NSBU * sizeof(int));
+    
+    idxsbu[0] = 0;
+    double* lusbu = calloc(2*NSBU, sizeof(double));
+    double* lsbu = lusbu;
+    double* usbu = lusbu + NSBU;
+    
+    for (int i = 0; i < N; i++)
+    {
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, i, "idxsbu", idxsbu);
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, i, "lsbu", lsbu);
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, i, "usbu", usbu);
+    }
+    free(idxsbu);
+    free(lusbu);
+
 
 
 
@@ -558,13 +621,16 @@ int sim_car_acados_create_with_discretization(sim_car_solver_capsule * capsule, 
     // x
     int* idxbx = malloc(NBX * sizeof(int));
     
-    idxbx[0] = 6;
+    idxbx[0] = 1;
+    idxbx[1] = 6;
     double* lubx = calloc(2*NBX, sizeof(double));
     double* lbx = lubx;
     double* ubx = lubx + NBX;
     
-    lbx[0] = -0.52;
-    ubx[0] = 0.52;
+    lbx[0] = -2;
+    ubx[0] = 2;
+    lbx[1] = -0.52;
+    ubx[1] = 0.52;
 
     for (int i = 1; i < N; i++)
     {

@@ -43,7 +43,7 @@ class Fren_AD3DOptimizer:
         if q_cost is None:
             q_cost = np.array([0.0, 10.0, 10.0, 10.0, 10.0, 1.0, 0.1])
         if r_cost is None:
-            r_cost = np.array([10.0, 100.0])             
+            r_cost = np.array([10.0, 10.0])             
 
         self.T = t_horizon  # Time horizon
         self.N = n_nodes  # number of control nodes within horizon
@@ -75,6 +75,10 @@ class Fren_AD3DOptimizer:
         
         self.acc_min = ad.acc_min
         self.acc_max = ad.acc_max
+
+        self.e_y_max = ad.e_y_max
+        self.e_y_min = ad.e_y_min
+
 
         # Declare model variables
         self.s = cs.MX.sym('s', 1)  # cdist
@@ -152,8 +156,8 @@ class Fren_AD3DOptimizer:
             ocp.cost.cost_type_e = 'LINEAR_LS'
 
             ocp.cost.W = np.diag(np.concatenate((q_cost, r_cost)))
-            ocp.cost.W_e = np.diag(q_cost)*0.1
-            ocp.cost.W_0 = np.diag(q_cost)
+            ocp.cost.W_e = np.diag(q_cost)*1e-2
+            ocp.cost.W_0 =  np.diag(q_cost)
             # terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
             # ocp.cost.W_e *= terminal_cost
 
@@ -163,6 +167,19 @@ class Fren_AD3DOptimizer:
             ocp.cost.Vu[-2:, -2:] = np.eye(nu)
 
             ocp.cost.Vx_e = np.eye(nx)
+
+            # number_of_slacks 
+            #number of slacks for state vector
+            nsx = 1
+            nsu = 1
+            # total number of slack
+            ns = 2
+
+            #cost for slacks            
+            ocp.cost.zl = 1e2*np.ones((ns,))
+            ocp.cost.Zl = 0*np.ones((ns,))
+            ocp.cost.zu = 1e2 * np.ones((ns,))
+            ocp.cost.Zu = 0 * np.ones((ns,))
 
             # Initial reference trajectory (will be overwritten)
             x_ref = np.zeros(nx)
@@ -176,11 +193,22 @@ class Fren_AD3DOptimizer:
             ocp.constraints.lbu = np.array([self.acc_min, self.steering_rate_min])
             ocp.constraints.ubu = np.array([self.acc_max, self.steering_rate_max])
             ocp.constraints.idxbu = np.array([0, 1])
-            # e_y_min = -10
-            # e_y_max = -10*e_y_min
-            ocp.constraints.lbx = np.array([self.steering_min])
-            ocp.constraints.ubx = np.array([self.steering_max])
-            ocp.constraints.idxbx = np.array([6])
+
+            ocp.constraints.lbx = np.array([self.e_y_min, self.steering_min])
+            ocp.constraints.ubx = np.array([self.e_y_max, self.steering_max])
+            ocp.constraints.idxbx = np.array([1,6])
+            
+            # Set slacks 
+            ocp.constraints.idxsbx = np.array([1])
+            # ocp.constraints.lsbx = np.zeros((nsx,))
+            # ocp.constraints.usbx = np.zeros((nsx,))
+
+            ocp.constraints.idxsbu = np.array([0])
+            # ocp.constraints.lsbu = np.zeros((nsu,))
+            # ocp.constraints.usbu = np.zeros((nsu,))
+            
+
+            
 
 
             # Solver options
@@ -232,12 +260,14 @@ class Fren_AD3DOptimizer:
             model.u = u
             model.p = p
             model.name = name
+            # model.con_h_expr = constraint
 
             return model
 
         acados_models = {}
         dynamics_equations = {}
-
+        
+        
 
             # No available GP so return nominal dynamics
         dynamics_equations[0] = nominal
@@ -247,7 +277,7 @@ class Fren_AD3DOptimizer:
         
         params = cs.vertcat(self.switch)
         
-        acados_models[0] = fill_in_acados_model(x=x_, u=self.u, p=params, dynamics=dynamics_, name=model_name)
+        acados_models[0] = fill_in_acados_model(x=x_, u=self.u, p=params,  dynamics=dynamics_, name=model_name)
 
         return acados_models, dynamics_equations
 
@@ -419,8 +449,10 @@ class Fren_AD3DOptimizer:
 
 
         # Solve OCPacados_ocp_solver
-        self.acados_ocp_solver[use_model].solve()
-
+        status = self.acados_ocp_solver[use_model].solve()
+        if status !=0:
+            self.acados_ocp_solver[use_model].store_iterate(filename = "debug.json", overwrite = True)
+            self.acados_ocp_solver[use_model].load_iterate(filename = "debug.json")
         # Get u
         w_opt_acados = np.ndarray((self.N, 2))
         x_opt_acados = np.ndarray((self.N + 1, len(x_init)))

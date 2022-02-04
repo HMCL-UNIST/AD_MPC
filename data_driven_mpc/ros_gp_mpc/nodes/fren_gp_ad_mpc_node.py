@@ -18,6 +18,7 @@ import rospy
 import threading
 import numpy as np
 import pandas as pd
+import math 
 from tqdm import tqdm
 from std_msgs.msg import Bool, Empty, Float64
 from nav_msgs.msg import Odometry
@@ -25,7 +26,7 @@ from geometry_msgs.msg import PoseStamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
 from autoware_msgs.msg import Lane, Waypoint
 from carla_msgs.msg import CarlaEgoVehicleStatus
-
+from ad_mpc.fren_ad_3d import Fren_AD3D
 from ad_mpc.fren_create_ros_ad_mpc import Fren_ROSGPMPC
 from utils.utils import jsonify, interpol_mse, quaternion_state_mse, load_pickled_models, v_dot_q, \
     separate_variables
@@ -44,13 +45,14 @@ def clamp(n, minn, maxn):
 
 class GPMPCWrapper:
     def __init__(self,environment="carla"):
-
+        
+        self.ad = Fren_AD3D(noisy=False, noisy_input= False)
         # Control at 50 (sim) or 60 (real) hz. Use time horizon=1 and 10 nodes
         self.n_mpc_nodes = rospy.get_param('~n_nodes', default=20.0)
         self.t_horizon = rospy.get_param('~t_horizon', default=2.0)
         self.traj_resample_vel = rospy.get_param('~traj_resample_vel', default=True)        
         self.control_freq_factor = rospy.get_param('~control_freq_factor', default=5 if environment == "carla" else 5)
-        
+        self.dt = self.t_horizon / self.n_mpc_nodes
         self.opt_dt = self.t_horizon / (self.n_mpc_nodes * self.control_freq_factor)
 #################################################################        
         # Initialize GP MPC for point tracking
@@ -170,16 +172,13 @@ class GPMPCWrapper:
             ref = ref.transpose()
             u_ref = np.zeros((len(vel_ref)-1,2))
             terminal_point = False
-            
-        
         
         # pose = np.array([self.x_ref,self.y_ref])
         # psi = np.array(self.psi_ref)
         # if self.velocity is None:
         #     return
         # vel = np.array(self.vel_ref)
-        # ref = [pose,psi,vel]
-        
+        # ref = [pose,psi,vel]        
         # ref_ = np.array([self.x_ref, self.y_ref, self.psi_ref, self.vel_ref])
         
         
@@ -191,21 +190,25 @@ class GPMPCWrapper:
             next_control, w_opt, x_opt = self.gp_mpc.optimize(model_data)
             ####################################
             if x_opt is not None:
-                self.predicted_trj_visualize(x_opt)
+                z_mpc = self.get_global_trajectory(w_opt,x_opt)
+                self.predicted_trj_visualize(z_mpc)
             ####################################
             self.optimization_dt += time.time() - tic
             # print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
-            control_msg = next_control.drive                                 
-            control_msg.steering_angle = max(min(self.steering_max, next_control.drive.steering_angle_velocity*0.1 + self.steering), self.steering_min)                        
+            control_msg = next_control.drive                                             
+            # control_msg.steering_angle = max(min(self.steering_max, next_control.drive.steering_angle_velocity*0.1 + self.steering), self.steering_min)                        
+            control_msg.steering_angle = next_control.drive.steering_angle_velocity*0.1 + self.steering
             # print("current steering  = " + str(self.steering))
             # print("angle = " + str(control_msg.steering_angle)) 
             # print("angle_velocity = " + str(next_control.drive.steering_angle_velocity)) 
             tt_steering = Float64()
-            tt_steering.data = -1*control_msg.steering_angle
-
+            tt_steering.data = -1*control_msg.steering_angle            
+            
             self.steering_pub.publish(tt_steering)
+            control_msg.acceleration = 0.0 
             self.control_pub.publish(control_msg)            
+            
 
         except KeyError:
             self.recording_warmup = True
@@ -215,6 +218,28 @@ class GPMPCWrapper:
 
         if w_opt is not None:            
             self.w_opt = w_opt            
+
+    def get_global_trajectory(self,w_opt,x_opt):
+        z_mpc = np.zeros((self.n_mpc_nodes+1,4))
+        init_velocity = math.sqrt(x_opt[0,3]**2+x_opt[0,4]**2)
+        # x, y , yaw, vx(local frame), vy(local frame)        
+        z_mpc[0,:] = [self.cur_x, self.cur_y,self.cur_yaw,init_velocity]        
+        
+        for ind in range(0,self.n_mpc_nodes):
+            x, y, p, v = z_mpc[ind, :]
+            u_acc = w_opt[2*(ind)]
+            
+            u_df = x_opt[ind,6]            
+            
+            beta = np.arctan( self.ad.L_R / (self.ad.L_F + self.ad.L_R) * np.tan(u_df))
+            x_ = x + self.dt * (v * np.cos(p + beta))
+            y_ = y + self.dt * (v * np.sin(p + beta))
+            p_ = p + self.dt * ((v / self.ad.L_R) * np.sin(beta))          
+            
+            v_ = v + self.dt * (u_acc)
+            z_mpc[ind+1, :] = [x_, y_, p_, v_]
+
+        return z_mpc
 
     def vehicle_status_callback(self,msg):
         if msg.velocity is None:
@@ -323,6 +348,13 @@ class GPMPCWrapper:
             self.psi_ref = [wrap_to_pi(quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2]) for i in range(len(msg.waypoints))]                                    
             
             self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
+
+            # insert current position as the initial reference point  --> not good... 
+            # self.x_ref.insert(0,self.cur_x)
+            # self.y_ref.insert(0,self.cur_y)
+            # self.psi_ref.insert(0,self.cur_yaw)
+            # self.vel_ref.insert(0,self.velocity)
+
             # self.final_waypoint_visualize()
             # resample trajectory with respect to vel_ref 
             # if self.traj_resample_vel and len(self.x_ref) > 33:                        
@@ -361,7 +393,7 @@ class GPMPCWrapper:
         self.cur_yaw = wrap_to_pi(cur_euler[2])
         
         pose = [msg.pose.position.x, msg.pose.position.y]        
-        psi = [self.cur_yaw]
+        psi = [self.cur_yaw]        
 
         
 

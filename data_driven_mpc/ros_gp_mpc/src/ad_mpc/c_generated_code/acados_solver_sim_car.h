@@ -41,11 +41,11 @@
 #define SIM_CAR_NZ     0
 #define SIM_CAR_NU     2
 #define SIM_CAR_NP     1
-#define SIM_CAR_NBX    1
+#define SIM_CAR_NBX    2
 #define SIM_CAR_NBX0   7
 #define SIM_CAR_NBU    2
-#define SIM_CAR_NSBX   0
-#define SIM_CAR_NSBU   0
+#define SIM_CAR_NSBX   1
+#define SIM_CAR_NSBU   1
 #define SIM_CAR_NSH    0
 #define SIM_CAR_NSG    0
 #define SIM_CAR_NSPHI  0
@@ -53,7 +53,7 @@
 #define SIM_CAR_NSGN   0
 #define SIM_CAR_NSPHIN 0
 #define SIM_CAR_NSBXN  0
-#define SIM_CAR_NS     0
+#define SIM_CAR_NS     2
 #define SIM_CAR_NSN    0
 #define SIM_CAR_NG     0
 #define SIM_CAR_NBXN   0
@@ -61,7 +61,7 @@
 #define SIM_CAR_NY0    9
 #define SIM_CAR_NY     9
 #define SIM_CAR_NYN    7
-#define SIM_CAR_N      10
+#define SIM_CAR_N      40
 #define SIM_CAR_NH     0
 #define SIM_CAR_NPHI   0
 #define SIM_CAR_NHN    0
