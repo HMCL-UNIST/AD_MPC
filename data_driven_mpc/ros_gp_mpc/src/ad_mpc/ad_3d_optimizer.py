@@ -162,12 +162,12 @@ class AD3DOptimizer:
             # nsx = 1
             nsu = 1
             # total number of slack
-            ns = 1
+            ns = 2
 
             #cost for slacks            
-            ocp.cost.zl = 1e2*np.ones((ns,))
+            ocp.cost.zl = 1e1*np.ones((ns,))
             ocp.cost.Zl = 0*np.ones((ns,))
-            ocp.cost.zu = 1e2 * np.ones((ns,))
+            ocp.cost.zu = 1e1 * np.ones((ns,))
             ocp.cost.Zu = 0 * np.ones((ns,))
             # Initial reference trajectory (will be overwritten)
             x_ref = np.zeros(nx)
@@ -191,7 +191,7 @@ class AD3DOptimizer:
             # ocp.constraints.lsbx = np.zeros((nsx,))
             # ocp.constraints.usbx = np.zeros((nsx,))
 
-            ocp.constraints.idxsbu = np.array([1])
+            ocp.constraints.idxsbu = np.array([0,1])
             # ocp.constraints.lsbu = np.zeros((nsu,))
             # ocp.constraints.usbu = np.zeros((nsu,))
             # Solver options
