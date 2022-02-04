@@ -163,11 +163,11 @@ class GPMPCWrapper:
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
         if self.end_of_goal or len(self.x_ref) < self.n_mpc_nodes:
-            ref = [x_ref[-1], y_ref[-1], psi_ref[-1], 0.0]
+            ref = [x_ref[-1], y_ref[-1], psi_ref[-1], 0.0, 0.0, 0.0, 0.0]
             u_ref = [0.0, 0.0]   
             terminal_point = True               
         else:        
-            ref = np.zeros([4,len(vel_ref)])
+            ref = np.zeros([7,len(vel_ref)])
             ref[0,:] = x_ref
             ref[1,:] = y_ref
             ref[2,:] = psi_ref
@@ -199,6 +199,7 @@ class GPMPCWrapper:
             # print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
             control_msg = next_control.drive                                                         
+            control_msg.steering_angle = next_control.drive.steering_angle_velocity*0.1 + self.steering
             # control_msg.steering_angle = next_control.drive.steering_angle_velocity*0.1 + self.steering            
             tt_steering = Float64()
             tt_steering.data = -1*control_msg.steering_angle            
@@ -371,22 +372,23 @@ class GPMPCWrapper:
         self.cur_yaw = wrap_to_pi(cur_euler[2])
         
         pose = [msg.pose.position.x, msg.pose.position.y]        
-        psi = [self.cur_yaw] 
+       
         
+        p_x = [msg.pose.position.x]
+        p_y = [msg.pose.position.y]
+        psi = [self.cur_yaw] 
+        v_x = [self.v_x]
+        v_y = [self.v_y]
+        psi_dot = [self.psi_dot]        
+        steering = [self.steering]
          
 
         if self.velocity is None or not self.odom_available or not self.waypoint_available:
             return        
-
-        vel = [self.velocity]    
-        # self.x = pose+psi+vel               
-        v_x = [self.v_x]
-        v_y = [self.v_y]
-        psi_dot = [self.psi_dot]        
-        steering = [self.steering]        
+                
         
-        # self.x = s0+e_y+e_psi+v_x+v_y+psi_dot+steering
-        self.x = pose+psi+vel
+        self.x = p_x+p_y+psi+v_x+v_y+psi_dot+steering
+        
         try:
             # Update the state estimate of the AD
 
@@ -402,9 +404,7 @@ class GPMPCWrapper:
                 y_ref    = waypoint_dict['y_ref']
                 psi_ref = waypoint_dict['psi_ref']
             
-                vel_ref = waypoint_dict['v_ref']  
-                curv_ref = waypoint_dict['curv_ref']    
-                cdist_ref = waypoint_dict['cdist_ref'] 
+                vel_ref = waypoint_dict['v_ref']                  
                                                           
             # else:
             #     rospy.ERROR("x_ref size should be greater than number of nodes in MPC")
