@@ -46,9 +46,10 @@ class AD3DOptimizer:
         self.T = t_horizon  # Time horizon
         self.N = n_nodes  # number of control nodes within horizon
 
+        
 
         self.ad = ad
-                 
+            
         #vehicle Mass in kg 
         self.mass = ad.mass                
         self.L_F = ad.L_F
@@ -428,15 +429,15 @@ class AD3DOptimizer:
         self.acados_ocp_solver[use_model].set(0, 'ubx', x_init)
         vel_switch = min(max((initial_state[0,3]- self.blend_min)/(self.blend_max-self.blend_min),0.0),1.0)                              
         
-        if initial_state[0,3] > self.blend_min:
-            print("Dynamics ~~ "+ str(vel_switch))
-        else:
-            print("Kinematics ~~ "+ str(vel_switch))
+        # if initial_state[0,3] > self.blend_min:
+        #     print("Dynamics ~~ "+ str(vel_switch))
+        # else:
+        #     print("Kinematics ~~ "+ str(vel_switch))
         for j in range(0, self.N+1):
             self.acados_ocp_solver[use_model].set(j, 'p', np.array([vel_switch]))
 
         # Solve OCPacados_ocp_solver
-        self.acados_ocp_solver[use_model].solve()
+        solver_status = self.acados_ocp_solver[use_model].solve()
 
         # Get u
         w_opt_acados = np.ndarray((self.N, 2))
@@ -447,4 +448,4 @@ class AD3DOptimizer:
             x_opt_acados[i + 1, :] = self.acados_ocp_solver[use_model].get(i + 1, "x")
 
         w_opt_acados = np.reshape(w_opt_acados, (-1))
-        return w_opt_acados if not return_x else (w_opt_acados, x_opt_acados)
+        return w_opt_acados if not return_x else (w_opt_acados, x_opt_acados, solver_status)

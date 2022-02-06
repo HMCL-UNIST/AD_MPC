@@ -86,7 +86,7 @@ class ROSGPMPC:
         return self.ad_mpc.set_reference(x_reference=x_ref, u_reference=u_ref, terminal_point = terminal_point)
 
     def optimize(self, model_data):
-        w_opt, x_opt = self.ad_mpc.optimize(use_model=model_data, return_x=True)
+        w_opt, x_opt, solver_status = self.ad_mpc.optimize(use_model=model_data, return_x=True)
         # Remember solution for next optimization
         # self.last_w = self.ad_mpc.reshape_input_sequence(w_opt)
         next_control_with_stamp = AckermannDriveStamped()                
@@ -98,4 +98,4 @@ class ROSGPMPC:
         next_control_with_stamp.drive.acceleration =  w_opt[0]        
         # next_control_with_stamp.jerk = 
 
-        return next_control_with_stamp, w_opt, x_opt
+        return next_control_with_stamp, w_opt, x_opt, solver_status

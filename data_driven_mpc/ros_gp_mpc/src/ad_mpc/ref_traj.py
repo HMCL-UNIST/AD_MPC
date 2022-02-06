@@ -153,16 +153,16 @@ class RefTrajectory():
 		
 		
 		
-		points_from_init = np.linspace(X_init,waypoint_dict['x_ref'][0],2)		
+		points_from_init = np.linspace(X_init,waypoint_dict['x_ref'][0],5)		
 		waypoint_dict['x_ref'] = np.hstack([points_from_init, waypoint_dict['x_ref']])
 
-		points_from_init = np.linspace(Y_init,waypoint_dict['y_ref'][0],2)		
+		points_from_init = np.linspace(Y_init,waypoint_dict['y_ref'][0],5)		
 		waypoint_dict['y_ref'] = np.hstack([points_from_init, waypoint_dict['y_ref']])
 
-		points_from_init = np.linspace(psi_init,waypoint_dict['psi_ref'][0],2)		
+		points_from_init = np.linspace(psi_init,waypoint_dict['psi_ref'][0],5)		
 		waypoint_dict['psi_ref'] = np.hstack([points_from_init, waypoint_dict['psi_ref']])
 
-		points_from_init = np.ones(2)*waypoint_dict['v_ref'][0]		
+		points_from_init = np.ones(5)*waypoint_dict['v_ref'][0]		
 		waypoint_dict['v_ref'] = np.hstack([points_from_init, waypoint_dict['v_ref']])
 
 
