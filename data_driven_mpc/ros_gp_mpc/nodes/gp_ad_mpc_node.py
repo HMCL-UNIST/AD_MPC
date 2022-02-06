@@ -62,8 +62,12 @@ class GPMPCWrapper:
         self.x = None
         self.velocity = None
         self.steering = None
-        self.steering_max = 0.5
-        self.steering_min = -1*self.steering_max
+        
+        self.steering_min = self.ad.steering_min
+        self.steering_max = self.ad.steering_max
+        self.steering_rate_min = self.ad.steering_rate_min
+        self.steering_rate_max = self.ad.steering_rate_max
+
         self.environment = environment
         # Elapsed time between two recordings
         self.last_update_time = time.time()
@@ -71,8 +75,6 @@ class GPMPCWrapper:
         # Last references. Use hovering activation as input reference
         self.last_x_ref = None
         self.last_u_ref = None
-
-        self.end_of_goal = False
 
         self.odom_available = False  
         
@@ -162,7 +164,7 @@ class GPMPCWrapper:
         dt = odom.header.stamp.to_time() - self.last_update_time
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
-        if self.end_of_goal or len(x_ref) < self.n_mpc_nodes:
+        if len(x_ref) < self.n_mpc_nodes:
             ref = [x_ref[-1], y_ref[-1], psi_ref[-1], 0.0, 0.0, 0.0, 0.0]
             u_ref = [0.0, 0.0]   
             terminal_point = True               
@@ -199,7 +201,8 @@ class GPMPCWrapper:
             # print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
             control_msg = next_control.drive                                                                     
-            control_msg.steering_angle = max(min(self.steering_max, next_control.drive.steering_angle_velocity*0.1 + self.steering), self.steering_min)                        
+            steering_val = max(min(self.steering_rate_max, next_control.drive.steering_angle_velocity), self.steering_rate_min)                        
+            control_msg.steering_angle = max(min(self.steering_max, steering_val*0.1 + self.steering), self.steering_min)                        
             tt_steering = Float64()
             tt_steering.data = -1*control_msg.steering_angle            
             
@@ -307,24 +310,17 @@ class GPMPCWrapper:
         """
         :type msg: autoware_msgs/Lane 
         """                
-        if len(msg.waypoints) < 3:
-            self.end_of_goal = True
-        else:
-            self.end_of_goal = False
         
-        msg.waypoints = msg.waypoints[1:-1]
+        # msg.waypoints = msg.waypoints[1:-1]
         if not self.waypoint_available:
             self.waypoint_available = True
         
-        if len(msg.waypoints) > 3:                         
-            # received messages             
-            # msg.waypoints = msg.waypoints[0:]
-            self.x_ref = [msg.waypoints[i].pose.pose.position.x for i in range(len(msg.waypoints))]
-            self.y_ref = [msg.waypoints[i].pose.pose.position.y for i in range(len(msg.waypoints))]                        
-            quat_to_euler_lambda = lambda o: quaternion_to_euler([o[0], o[1], o[2], o[3]])            
-            self.psi_ref = [wrap_to_pi(quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2]) for i in range(len(msg.waypoints))]                                    
-            
-            self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
+        self.x_ref = [msg.waypoints[i].pose.pose.position.x for i in range(len(msg.waypoints))]
+        self.y_ref = [msg.waypoints[i].pose.pose.position.y for i in range(len(msg.waypoints))]                        
+        quat_to_euler_lambda = lambda o: quaternion_to_euler([o[0], o[1], o[2], o[3]])            
+        self.psi_ref = [wrap_to_pi(quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2]) for i in range(len(msg.waypoints))]                                    
+        
+        self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
 
             # insert current position as the initial reference point  --> not good... 
             # self.x_ref.insert(0,self.cur_x)
@@ -334,12 +330,15 @@ class GPMPCWrapper:
 
             # self.final_waypoint_visualize()
             # resample trajectory with respect to vel_ref 
-            # if self.traj_resample_vel and len(self.x_ref) > 33:                        
+            # if self.traj_resample_vel and len(self.x_ref) > 33:  
             
-            self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
-        else:
-            rospy.loginfo("Waypoints are empty")    
-            self.end_of_goal = True    
+        while len(self.x_ref) < self.n_mpc_nodes:
+            self.x_ref.insert(-1,self.x_ref[-1])
+            self.y_ref.insert(-1,self.y_ref[-1])
+            self.psi_ref.insert(-1,self.psi_ref[-1])
+            self.vel_ref.insert(-1,self.vel_ref[-1])
+
+        self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
             
         # if len(msg.waypoints) > 10:
             
