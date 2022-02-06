@@ -194,6 +194,14 @@ class GPMPCWrapper:
         try:
             tic = time.time()            
             next_control, w_opt, x_opt, self.solver_status = self.gp_mpc.optimize(model_data)
+            ####################################
+            if x_opt is not None:                
+                self.predicted_trj_visualize(x_opt)
+            ####################################
+            ## Check whether the predicted trajectory is close to the actual reference trajectory // if not apply auxillary control
+            self.pred_trj_healthy = self.check_pred_trj(x_opt,ref)
+            
+
             if self.solver_status > 0:                                
                 self.mpc_safe_count = 0
                 self.reset_mpc_optimizer()                
@@ -203,10 +211,9 @@ class GPMPCWrapper:
             if self.mpc_safe_count < self.mpc_safe_count_threshold:
                 return
 
-            ####################################
-            if x_opt is not None:                
-                self.predicted_trj_visualize(x_opt)
-            ####################################
+            if not self.pred_trj_healthy:
+                return
+
             self.optimization_dt += time.time() - tic
             print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
@@ -215,7 +222,7 @@ class GPMPCWrapper:
             control_msg.steering_angle = max(min(self.steering_max, steering_val*0.1 + self.steering), self.steering_min)                        
             tt_steering = Float64()
             tt_steering.data = -1*control_msg.steering_angle            
-            control_msg.acceleration = -110.0
+            # control_msg.acceleration = -110.0
             self.steering_pub.publish(tt_steering)            
             self.control_pub.publish(control_msg)            
             
@@ -230,6 +237,17 @@ class GPMPCWrapper:
             self.w_opt = w_opt            
 
    
+    def check_pred_trj(self,x_opt, ref):
+        # the average distance between reference and the predicted trj le
+        tmp_dist = np.zeros(len(ref))        
+        for i in range(0,len(ref)-1):
+            tmp_dist[i] = math.sqrt((ref[i,0] - x_opt[i,0])**2+(ref[i,1] - x_opt[i,1])**2)
+    
+        if np.mean(tmp_dist) < 3.0 and np.cov(tmp_dist) < 2 and np.max(tmp_dist) < 4:
+            return True
+        else:
+            return False
+        
 
     def vehicle_status_callback(self,msg):
         if msg.velocity is None:
@@ -360,6 +378,7 @@ class GPMPCWrapper:
         self.cur_z = msg.pose.position.z                
         cur_euler = quaternion_to_euler([msg.pose.orientation.w,msg.pose.orientation.x,msg.pose.orientation.y,msg.pose.orientation.z])            
         self.cur_yaw = wrap_to_pi(cur_euler[2])        
+        
         p_x = [self.cur_x]
         p_y = [self.cur_y]
         psi = [self.cur_yaw] 
@@ -371,20 +390,21 @@ class GPMPCWrapper:
         self.x = p_x+p_y+psi+v_x+v_y+psi_dot+steering
         
         try:
-            # Update the state estimate of the AD
-            self.gp_mpc.set_state(self.x)
-            # reset the reference traj 
-            if not self.waypoint_available:
-                return
-            
-            waypoint_dict = self.ref_gen.get_waypoints(p_x[0], p_y[0], psi[0])
-            
-            x_ref    = waypoint_dict['x_ref']            
-            y_ref    = waypoint_dict['y_ref']
-            psi_ref = waypoint_dict['psi_ref']        
-            vel_ref = waypoint_dict['v_ref']                  
+            if self.mpc_ready:
+                # Update the state estimate of the AD
+                self.gp_mpc.set_state(self.x)
+                # reset the reference traj 
+                if not self.waypoint_available:
+                    return
                 
-            self.waypoint_visualize(x_ref,y_ref,psi_ref)
+                waypoint_dict = self.ref_gen.get_waypoints(p_x[0], p_y[0], psi[0])
+                
+                x_ref    = waypoint_dict['x_ref']            
+                y_ref    = waypoint_dict['y_ref']
+                psi_ref = waypoint_dict['psi_ref']        
+                vel_ref = waypoint_dict['v_ref']                  
+                    
+                self.waypoint_visualize(x_ref,y_ref,psi_ref)
             
         except AttributeError:
             rospy.loginfo("mpc_node......set_state fail")
@@ -406,7 +426,7 @@ class GPMPCWrapper:
         def _aux_thread_func():
                 self.run_pure(msg,x_ref,y_ref,psi_ref,vel_ref)
         
-        if self.mpc_safe_count < self.mpc_safe_count_threshold:         
+        if self.mpc_safe_count < self.mpc_safe_count_threshold or not self.pred_trj_healthy:         
             # implement auxilary controller (e.g. PID)             
             self.pure_thread = threading.Thread(target=_aux_thread_func(), args=(), daemon=True)
             self.pure_thread.start()
@@ -431,7 +451,7 @@ class GPMPCWrapper:
             tic = time.time()                        
             control_msg = AckermannDrive()                        
             control_msg.steering_angle =  self.steering 
-            control_msg.acceleration = -100           
+            control_msg.acceleration = -1e5          
             self.control_pub.publish(control_msg)            
             
 

@@ -87,6 +87,7 @@ class RefTrajectory():
 	
 	# Main callback function to get the waypoints from the vehicle's initial pose and the prerecorded global trajectory.
 	def get_waypoints(self, X_init, Y_init, psi_init):
+		
 		if self.access_map is None:
 			rospy.loginfo("trajectory has not been set")
 			return
@@ -153,19 +154,18 @@ class RefTrajectory():
 		
 		
 		
-		points_from_init = np.linspace(X_init,waypoint_dict['x_ref'][0],5)		
-		waypoint_dict['x_ref'] = np.hstack([points_from_init, waypoint_dict['x_ref']])
+		points_from_init = np.linspace(X_init,waypoint_dict['x_ref'][1],3)		
+		waypoint_dict['x_ref'] = np.hstack([points_from_init, waypoint_dict['x_ref'][2:-1]])
 
-		points_from_init = np.linspace(Y_init,waypoint_dict['y_ref'][0],5)		
-		waypoint_dict['y_ref'] = np.hstack([points_from_init, waypoint_dict['y_ref']])
+		points_from_init = np.linspace(Y_init,waypoint_dict['y_ref'][1],3)		
+		waypoint_dict['y_ref'] = np.hstack([points_from_init, waypoint_dict['y_ref'][2:-1]])
+		
+		points_from_init = np.ones(3)*waypoint_dict['psi_ref'][0]		
+		waypoint_dict['psi_ref'] = np.hstack([points_from_init, waypoint_dict['psi_ref'][2:-1]])
 
-		points_from_init = np.linspace(psi_init,waypoint_dict['psi_ref'][0],5)		
-		waypoint_dict['psi_ref'] = np.hstack([points_from_init, waypoint_dict['psi_ref']])
+		points_from_init = np.ones(3)*waypoint_dict['v_ref'][2]		
+		waypoint_dict['v_ref'] = np.hstack([points_from_init, waypoint_dict['v_ref'][2:-1]])
 
-		points_from_init = np.ones(5)*waypoint_dict['v_ref'][0]		
-		waypoint_dict['v_ref'] = np.hstack([points_from_init, waypoint_dict['v_ref']])
+		
 
-
-			
-
-		return waypoint_dict # keys ['s0', 'e_y0, 'e_psi0', 'x_ref', 'y_ref', 'psi_ref', 'cdist_ref', 'curv_ref', 'v_ref', 'stop']
+		return waypoint_dict # keys ['s0', 'e_y0, 'e_psi0', 'x_ref', 'y_ref', 'psi_ref', 'cdist_ref', 'curv_ref2
