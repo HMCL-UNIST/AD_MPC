@@ -148,7 +148,7 @@ class AD3DOptimizer:
 
             ocp.cost.W = np.diag(np.concatenate((q_cost, r_cost)))
             # ocp.cost.W_e = np.diag(q_cost)
-            ocp.cost.W_e = np.diag(q_cost)*1e-2
+            ocp.cost.W_e = np.diag(q_cost)*1e-6
             # ocp.cost.W_0 =  np.diag(q_cost)*1e2
             # terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
             # ocp.cost.W_e *= terminal_cost

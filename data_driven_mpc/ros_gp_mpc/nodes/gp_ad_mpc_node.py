@@ -355,7 +355,7 @@ class GPMPCWrapper:
         if not self.odom_available:
             return
 
-        msg.waypoints = msg.waypoints[1:-1]
+        msg.waypoints = msg.waypoints[0:-1]
         if not self.waypoint_available:
             self.waypoint_available = True
         
