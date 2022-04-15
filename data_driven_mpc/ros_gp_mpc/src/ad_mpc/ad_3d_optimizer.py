@@ -11,7 +11,7 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see <http://www.gnu.org/licenses/>.
 """
 
-
+import math
 import os
 import sys
 import shutil
@@ -37,32 +37,53 @@ class AD3DOptimizer:
         :param solver_options: Optional set of extra options dictionary for solvers.        
         """
 
-        # Weighted squared error loss function q = (p_xyz, a_xyz, v_xyz, r_xyz), r = (u1, u2, u3, u4)
+                            # p_x,  p_y, psi, v_x, v_y, psi_dot, delta
         if q_cost is None:
-            q_cost = np.array([1.0, 1.0, 10., 5.0])
+            q_cost = np.array([100, 100, 500, 0.0, 0.0, 1.0, 1])
         if r_cost is None:
-            r_cost = np.array([10.0, 100.0])             
+            r_cost = np.array([1.0, 100.0])             
 
         self.T = t_horizon  # Time horizon
         self.N = n_nodes  # number of control nodes within horizon
 
+        
 
         self.ad = ad
-    
+            
+        #vehicle Mass in kg 
+        self.mass = ad.mass                
+        self.L_F = ad.L_F
+        self.L_R = ad.L_R
+        #Moment of Inertia in z axis 
+        self.Iz = ad.Iz                
+        #Cornering Stiffness for single wheel(N/rad)         
+        self.Cf = ad.Cf
+        self.Cr = ad.Cr
+        self.blend_max = ad.blend_max
+        self.blend_min = ad.blend_min
         self.steering_min = ad.steering_min
         self.steering_max = ad.steering_max
+        self.steering_rate_min = ad.steering_rate_min
+        self.steering_rate_max = ad.steering_rate_max
         self.acc_min = ad.acc_min
         self.acc_max = ad.acc_max
 
         # Declare model variables
-        self.p = cs.MX.sym('p', 2)  # position
-        self.s = cs.MX.sym('s', 1)  # psi 
-        self.v = cs.MX.sym('v', 1)  # velocity        
+        self.p_x = cs.MX.sym('p_x', 1)  # position x
+        self.p_y = cs.MX.sym('p_y', 1)  # position y 
+        self.psi = cs.MX.sym('psi', 1)  # psi 
+        self.v_x = cs.MX.sym('v_x', 1)  # vel x 
+        self.v_y = cs.MX.sym('v_y', 1)  # vel y 
+        self.psi_dot = cs.MX.sym('psi_dot', 1)  # psi dot 
+        self.delta = cs.MX.sym('delta', 1)  # delta 
+        self.switch = cs.MX.sym('switch',1)
+        
+          
 
-        # Full state vector (4-dimensional)
-        self.x = cs.vertcat(self.p, self.s, self.v)
-        self.state_dim = 4
-
+        # Full state vector (7-dimensional)
+        self.x = cs.vertcat(self.p_x, self.p_y, self.psi, self.v_x, self.v_y, self.psi_dot, self.delta)
+        self.state_dim = 7
+        self.x_init = np.zeros(7)
         # Control input vector
         u1 = cs.MX.sym('u1')
         u2 = cs.MX.sym('u2')
@@ -124,9 +145,11 @@ class AD3DOptimizer:
             ocp.cost.cost_type_e = 'LINEAR_LS'
 
             ocp.cost.W = np.diag(np.concatenate((q_cost, r_cost)))
-            ocp.cost.W_e = np.diag(q_cost)
-            terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
-            ocp.cost.W_e *= terminal_cost
+            # ocp.cost.W_e = np.diag(q_cost)
+            ocp.cost.W_e = np.diag(q_cost)*1e-2
+            # ocp.cost.W_0 =  np.diag(q_cost)*1e2
+            # terminal_cost = 0 if solver_options is None or not solver_options["terminal_cost"] else 1
+            # ocp.cost.W_e *= terminal_cost
 
             ocp.cost.Vx = np.zeros((ny, nx))
             ocp.cost.Vx[:nx, :nx] = np.eye(nx)
@@ -135,6 +158,18 @@ class AD3DOptimizer:
 
             ocp.cost.Vx_e = np.eye(nx)
 
+            # number_of_slacks 
+            #number of slacks for state vector
+            # nsx = 1
+            nsu = 1
+            # total number of slack
+            ns = 2
+
+            #cost for slacks            
+            ocp.cost.zl = 1e1*np.ones((ns,))
+            ocp.cost.Zl = 0*np.ones((ns,))
+            ocp.cost.zu = 1e1 * np.ones((ns,))
+            ocp.cost.Zu = 0 * np.ones((ns,))
             # Initial reference trajectory (will be overwritten)
             x_ref = np.zeros(nx)
             ocp.cost.yref = np.concatenate((x_ref, np.array([0.0, 0.0])))
@@ -144,10 +179,22 @@ class AD3DOptimizer:
             ocp.constraints.x0 = x_ref
 
             # Set constraints
-            ocp.constraints.lbu = np.array([self.acc_min, self.steering_min])
-            ocp.constraints.ubu = np.array([self.acc_max, self.steering_max])
+            ocp.constraints.lbu = np.array([self.acc_min, self.steering_rate_min])
+            ocp.constraints.ubu = np.array([self.acc_max, self.steering_rate_max])
             ocp.constraints.idxbu = np.array([0, 1])
 
+            ocp.constraints.lbx = np.array([self.steering_min])
+            ocp.constraints.ubx = np.array([self.steering_max])
+            ocp.constraints.idxbx = np.array([6])
+            
+            # Set slacks 
+            # ocp.constraints.idxsbx = np.array([1])
+            # ocp.constraints.lsbx = np.zeros((nsx,))
+            # ocp.constraints.usbx = np.zeros((nsx,))
+
+            ocp.constraints.idxsbu = np.array([0,1])
+            # ocp.constraints.lsbu = np.zeros((nsu,))
+            # ocp.constraints.usbu = np.zeros((nsu,))
             # Solver options
             ocp.solver_options.qp_solver = 'FULL_CONDENSING_HPIPM'
             ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
@@ -209,8 +256,10 @@ class AD3DOptimizer:
 
         x_ = self.x
         dynamics_ = nominal
+        params = cs.vertcat(self.switch)
 
-        acados_models[0] = fill_in_acados_model(x=x_, u=self.u, p=[], dynamics=dynamics_, name=model_name)
+        acados_models[0] = fill_in_acados_model(x=x_, u=self.u, p=params,  dynamics=dynamics_, name=model_name)
+        
 
         return acados_models, dynamics_equations
 
@@ -219,23 +268,44 @@ class AD3DOptimizer:
         Symbolic dynamics of the 2D AD model. The state consists on: [p_xy, psi, speed]^T.
         The input of the system is: [u_1, u_2], i.e. acceleration & delta(steering angle)
 
-        :return: CasADi function that computes the analytical differential state dynamics of the quadrotor model.
+        :return: CasADi function that computes the analytical differential state dynamics of the AD  model.
         Inputs: 'x' state of AD (4x1) and 'u' control input (2x1). Output: differential state vector 'x_dot'
         (4x1)
         """
-        x_dot = cs.vertcat(self.p_dynamics(), self.s_dynamics(), self.v_dynamics())
-        return cs.Function('x_dot', [self.x[:4], self.u], [x_dot], ['x', 'u'], ['x_dot'])
+        x_dot = cs.vertcat(self.p_x_dynamics(), self.p_y_dynamics(), self.psi_dynamics(), self.v_x_dynamics(), self.v_y_dynamics(), self.psi_dot_dynamics(),self.delta_dynamics())
+        return cs.Function('x_dot', [self.x[:7], self.u], [x_dot], ['x', 'u'], ['x_dot'])
 
-    def p_dynamics(self):
-        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.u[1]))        
-        return cs.vertcat(self.v * cs.cos(self.s + beta), self.v * cs.sin(self.s+beta))
+    def p_x_dynamics(self):                
+        return self.v_x*cs.cos(self.psi)-self.v_y*cs.sin(self.psi)
 
-    def s_dynamics(self):
-        beta = cs.atan(self.ad.L_R / (self.ad.L_F + self.ad.L_R) * cs.tan(self.u[1]))                
-        return self.v/self.ad.L_R*cs.sin(beta)
+    def p_y_dynamics(self):        
+        return self.v_x*cs.sin(self.psi)+self.v_y*cs.cos(self.psi)
+    
+    def psi_dynamics(self):
+        return self.psi_dot
 
-    def v_dynamics(self):        
-        return self.u[0]   
+    def v_x_dynamics(self):
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))        
+        v_x_dynamics = self.u[0] - (1/self.mass)*F_f_y*cs.sin(self.delta)+self.v_y*self.psi_dot                 
+        v_x_kinematics = self.u[0]                
+        return self.switch*v_x_dynamics+(1-self.switch)*v_x_kinematics
+
+    def v_y_dynamics(self):
+        F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/(self.v_x+1e-99)
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))   
+        v_y_dynamics = 1/self.mass * (  F_r_y + F_f_y*cs.cos(self.delta)) - self.v_x*self.psi_dot  
+        v_y_kinematics = (self.u[1]*self.v_x+self.delta*self.u[0])*self.L_R/(self.L_R+self.L_F)        
+        return self.switch*v_y_dynamics+(1-self.switch)*v_y_kinematics
+        
+    def psi_dot_dynamics(self):
+        F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/(self.v_x+1e-99)
+        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))           
+        psi_dot_dynamics = (1/self.Iz)*(self.L_F*F_f_y*cs.cos(self.delta)-self.L_R*F_r_y)
+        psi_dot_kinematics = (self.u[1]*self.v_x+self.delta*self.u[0])/(self.L_R+self.L_F)        
+        return self.switch*psi_dot_dynamics+(1-self.switch)*psi_dot_kinematics
+                
+    def delta_dynamics(self):        
+        return self.u[1]   
 
     def set_reference_state(self, x_target=None, u_target=None):
         """
@@ -244,7 +314,7 @@ class AD3DOptimizer:
         :param u_target: 2-dimensional target control input vector (u_1, u_2, u_3, u_4)
         """
         if x_target is None:
-            x_target = [[0, 0, 0, 0]]
+            x_target = [[0, 0, 0, 0, 0, 0, 0]]
             return
         if u_target is None:
             u_target = [0, 0]
@@ -286,17 +356,27 @@ class AD3DOptimizer:
         # tmp = x_target[:,2] 
         # np.place(tmp,tmp < -3, tmp+2*np.pi)
         # x_target[:,2] = tmp
-        self.target = copy(x_target)       
-        print(x_target)        
-        stacked_x_target = x_target 
+        self.target = copy(x_target)      
+        self.u_target = copy(u_target) 
+        # print(x_target)        
+        # stacked_x_target = x_target 
         
         
-        for j in range(self.N):
-            ref = stacked_x_target[j, :]
-            ref = np.concatenate((ref, u_target[j, :]))
-            self.acados_ocp_solver[gp_ind].set(j, "yref", ref)
-        # the last MPC node has only a state reference but no input reference
-        self.acados_ocp_solver[gp_ind].set(self.N, "yref", stacked_x_target[self.N, :])
+        # for j in range(self.N):
+        #     ref = stacked_x_target[j, :]
+        #     ref = np.concatenate((ref, u_target[j, :]))
+            
+        #     if self.x_init[2] < 0:                
+        #         if self.x_init[2]+math.pi < ref[2]: 
+        #             ref[2] = ref[2]-2*math.pi
+        #     elif self.x_init[2] > 0:                
+        #         if self.x_init[2]-math.pi > ref[2]: 
+        #             ref[2] = ref[2]+2*math.pi               
+
+        #     self.acados_ocp_solver[gp_ind].set(j, "yref", ref)
+        # # the last MPC node has only a state reference but no input reference
+        # self.acados_ocp_solver[gp_ind].set(self.N, "yref", stacked_x_target[self.N, :])
+
         return gp_ind
 
     
@@ -313,19 +393,51 @@ class AD3DOptimizer:
         """
 
         if initial_state is None:
-            initial_state = [0.0, 0.0] + [0.0]+ [0.0]
+            initial_state = [0.0] + [0.0]+ [0.0] + [0.0] + [0.0] + [0.0] + [0.0]
 
         # Set initial state. Add gp state if needed
         x_init = initial_state
         x_init = np.stack(x_init)
         x_init = x_init.squeeze()
+        self.x_init = x_init 
+
+        stacked_x_target = self.target 
+        
+        
+        for j in range(self.N):
+            ref = stacked_x_target[j, :]
+            ref = np.concatenate((ref, self.u_target[j, :]))                      
+            if self.x_init[2] < 0:                
+                if self.x_init[2]+math.pi < ref[2]: 
+                    ref[2] = ref[2]-2*math.pi       
+            elif self.x_init[2] > 0:                
+                if self.x_init[2]-math.pi > ref[2]: 
+                    ref[2] = ref[2]+2*math.pi               
+
+            self.acados_ocp_solver[use_model].set(j, "yref", ref)
+        # the last MPC node has only a state reference but no input reference
+        if self.x_init[2] < 0:                
+            if self.x_init[2]+math.pi < stacked_x_target[self.N, 2]: 
+                stacked_x_target[self.N, 2] = stacked_x_target[self.N, 2]-2*math.pi
+        elif self.x_init[2] > 0:                
+            if self.x_init[2]-math.pi > stacked_x_target[self.N, 2]: 
+                stacked_x_target[self.N, 2] = stacked_x_target[self.N, 2]+2*math.pi    
+        self.acados_ocp_solver[use_model].set(self.N, "yref", stacked_x_target[self.N, :])
 
         # Set initial condition, equality constraint
         self.acados_ocp_solver[use_model].set(0, 'lbx', x_init)
         self.acados_ocp_solver[use_model].set(0, 'ubx', x_init)
+        vel_switch = min(max((initial_state[0,3]- self.blend_min)/(self.blend_max-self.blend_min),0.0),1.0)                              
         
+        # if initial_state[0,3] > self.blend_min:
+        #     print("Dynamics ~~ "+ str(vel_switch))
+        # else:
+        #     print("Kinematics ~~ "+ str(vel_switch))
+        for j in range(0, self.N+1):
+            self.acados_ocp_solver[use_model].set(j, 'p', np.array([vel_switch]))
+
         # Solve OCPacados_ocp_solver
-        self.acados_ocp_solver[use_model].solve()
+        solver_status = self.acados_ocp_solver[use_model].solve()
 
         # Get u
         w_opt_acados = np.ndarray((self.N, 2))
@@ -336,4 +448,4 @@ class AD3DOptimizer:
             x_opt_acados[i + 1, :] = self.acados_ocp_solver[use_model].get(i + 1, "x")
 
         w_opt_acados = np.reshape(w_opt_acados, (-1))
-        return w_opt_acados if not return_x else (w_opt_acados, x_opt_acados)
+        return w_opt_acados if not return_x else (w_opt_acados, x_opt_acados, solver_status)

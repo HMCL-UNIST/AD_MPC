@@ -37,10 +37,10 @@
 #include "acados_c/sim_interface.h"
 #include "acados_c/external_function_interface.h"
 
-#define SIM_CAR_NX     4
+#define SIM_CAR_NX     7
 #define SIM_CAR_NZ     0
 #define SIM_CAR_NU     2
-#define SIM_CAR_NP     0
+#define SIM_CAR_NP     1
 
 #ifdef __cplusplus
 extern "C" {

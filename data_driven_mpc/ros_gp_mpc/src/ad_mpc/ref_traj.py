@@ -16,10 +16,10 @@ def compute_curvature(cdists, psis):
 
 	curv_raw = diff_psis / np.maximum(diff_dists, 0.1) # use diff_dists where greater than 10 cm	
 	curv_raw = np.insert(curv_raw, len(curv_raw), curv_raw[-1]) # curvature at last waypoint	
-	if len(curv_raw) > 33:
-		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw) # curvature filter suggested by Jinkkwon Kim.
-	else:
-		curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=3)		
+	# if len(curv_raw) > 33:
+	curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw) # curvature filter suggested by Jinkkwon Kim.
+	# else:
+	# 	curv_filt = filtfilt(np.ones((11,))/11, 1, curv_raw, padlen=min(len(cdists),3))		
 	# Curvature Filtering: (https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.filtfilt.html)
 	
 	return curv_filt
@@ -87,6 +87,7 @@ class RefTrajectory():
 	
 	# Main callback function to get the waypoints from the vehicle's initial pose and the prerecorded global trajectory.
 	def get_waypoints(self, X_init, Y_init, psi_init):
+		
 		if self.access_map is None:
 			rospy.loginfo("trajectory has not been set")
 			return
@@ -118,14 +119,17 @@ class RefTrajectory():
 		#     WARNING: this function does not handle well the case where the car is far from the recorded path!
 		#     Ill-defined behavior/speed.
 		#     Could use the actual minimum distance and add appropriate logic to handle this edge case.
-
 		
 			# Given a velocity reference, use the cumulative distance for interpolation.
 		start_dist = self.trajectory[closest_index, self.access_map['cdist']]			
 		interp_by_key = 'cdist'
 		while len(vel_references) < self.traj_horizon+1:
 			vel_references = np.concatenate((vel_references, [0.01]))
-		interp_to_fit = [h*self.traj_dt*vel_references[h] + start_dist for h in range(1, self.traj_horizon+1)]
+		
+		interp_to_fit = [self.traj_dt*vel_references[0]]
+		for h in range(1,self.traj_horizon):
+			interp_to_fit.append(interp_to_fit[-1]+self.traj_dt*vel_references[h])
+		# interp_to_fit = [h*self.traj_dt*vel_references[h] + start_dist for h in range(1, self.traj_horizon+1)]
 		
 		for waypoint_key in ['x', 'y', 'psi', 'cdist', 'curv']:
 			if waypoint_key == 'psi':
@@ -147,5 +151,21 @@ class RefTrajectory():
 		waypoint_dict['stop'] = False
 		if waypoint_dict['cdist_ref'][-1] == self.trajectory[:, self.access_map['cdist']][-1]:
 			waypoint_dict['stop'] = True # reached the end of the trajectory, so give a stop command.
+		
+		
+		
+		points_from_init = np.linspace(X_init,waypoint_dict['x_ref'][1],3)		
+		waypoint_dict['x_ref'] = np.hstack([points_from_init, waypoint_dict['x_ref'][2:-1]])
 
-		return waypoint_dict # keys ['s0', 'e_y0, 'e_psi0', 'x_ref', 'y_ref', 'psi_ref', 'cdist_ref', 'curv_ref', 'v_ref', 'stop']
+		points_from_init = np.linspace(Y_init,waypoint_dict['y_ref'][1],3)		
+		waypoint_dict['y_ref'] = np.hstack([points_from_init, waypoint_dict['y_ref'][2:-1]])
+		
+		points_from_init = np.ones(3)*waypoint_dict['psi_ref'][0]		
+		waypoint_dict['psi_ref'] = np.hstack([points_from_init, waypoint_dict['psi_ref'][2:-1]])
+
+		points_from_init = np.ones(3)*waypoint_dict['v_ref'][2]		
+		waypoint_dict['v_ref'] = np.hstack([points_from_init, waypoint_dict['v_ref'][2:-1]])
+
+		
+
+		return waypoint_dict # keys ['s0', 'e_y0, 'e_psi0', 'x_ref', 'y_ref', 'psi_ref', 'cdist_ref', 'curv_ref2

@@ -54,9 +54,9 @@ class ROSGPMPC:
                 "solver_type": "SQP_RTI",
                 "terminal_cost": False
             }
-
-        q_diagonal = np.array([1.0, 1.0, 10.0, 10.0])
-        r_diagonal = np.array([10.0, 20.0])        
+                            #  p_x,  p_y, psi, v_x, v_y, psi_dot, delta 
+        q_diagonal = np.array([10.0, 10.0,  500.0, 0.0, 0.0, 0.0,   10.0])
+        r_diagonal = np.array([1, 5.0])   
 
         ad_mpc = AD3DMPC(ad, t_horizon=t_horizon, optimization_dt=opt_dt, n_nodes=n_mpc_nodes, 
                             model_name=ad_name, solver_options=acados_config, q_cost=q_diagonal, r_cost=r_diagonal)
@@ -86,16 +86,16 @@ class ROSGPMPC:
         return self.ad_mpc.set_reference(x_reference=x_ref, u_reference=u_ref, terminal_point = terminal_point)
 
     def optimize(self, model_data):
-        w_opt, x_opt = self.ad_mpc.optimize(use_model=model_data, return_x=True)
+        w_opt, x_opt, solver_status = self.ad_mpc.optimize(use_model=model_data, return_x=True)
         # Remember solution for next optimization
         # self.last_w = self.ad_mpc.reshape_input_sequence(w_opt)
         next_control_with_stamp = AckermannDriveStamped()                
         next_control_with_stamp.header = std_msgs.msg.Header()
         next_control_with_stamp.header.stamp = rospy.Time.now()        
-        next_control_with_stamp.drive.steering_angle = w_opt[1]
-        # next_control_with_stamp.steering_angle_velocity = 
+        next_control_with_stamp.drive.steering_angle = x_opt[0,6]
+        next_control_with_stamp.drive.steering_angle_velocity = w_opt[1]        
         next_control_with_stamp.drive.speed = x_opt[0,3]                
-        next_control_with_stamp.drive.acceleration = w_opt[0]        
+        next_control_with_stamp.drive.acceleration =  w_opt[0]        
         # next_control_with_stamp.jerk = 
 
-        return next_control_with_stamp, w_opt, x_opt
+        return next_control_with_stamp, w_opt, x_opt, solver_status
