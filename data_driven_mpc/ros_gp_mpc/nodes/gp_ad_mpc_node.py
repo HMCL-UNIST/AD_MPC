@@ -152,9 +152,9 @@ class GPMPCWrapper:
             rate.sleep()
 
     def reset_mpc_optimizer(self):
-        del self.gp_mpc
+        # del self.gp_mpc
         self.mpc_ready = False
-        self.gp_mpc = ROSGPMPC(self.t_horizon, self.n_mpc_nodes, self.opt_dt)        
+        # self.gp_mpc = ROSGPMPC(self.t_horizon, self.n_mpc_nodes, self.opt_dt)        
         self.mpc_ready = True
     
     def run_mpc(self, odom, x_ref,y_ref,psi_ref,vel_ref, recording=True):
@@ -200,7 +200,7 @@ class GPMPCWrapper:
             ####################################
             ## Check whether the predicted trajectory is close to the actual reference trajectory // if not apply auxillary control
             self.pred_trj_healthy = self.check_pred_trj(x_opt,ref)
-            self.pred_trj_healthy = True
+            
             
 
             if self.solver_status > 0:                                
@@ -343,16 +343,11 @@ class GPMPCWrapper:
 
     def resample_vel(self):    
         MAX_bound = math.sqrt(self.v_x**2 + self.v_y**2)  
-        MIN_bound = math.sqrt(self.v_x**2 + self.v_y**2)        
         for i in range(len(self.vel_ref)):
             if(self.vel_ref[i] > MAX_bound):
                 self.vel_ref[i] = MAX_bound
-            if(self.vel_ref[i] < MIN_bound):
-                self.vel_ref[i] = MIN_bound
             MAX_bound = MAX_bound + self.ad.acc_max*self.dt*0.8 
-            MIN_bound = MIN_bound + self.ad.acc_min*self.dt 
-
-
+        
     def waypoint_callback(self, msg):
         """
         :type msg: autoware_msgs/Lane 

@@ -25,6 +25,7 @@ from utils.utils import skew_symmetric, v_dot_q, safe_mkdir_recursive, quaternio
 # from utils.quad_3d_opt_utils import discretize_dynamics_and_cost
 
 
+
 class AD3DOptimizer:
     def __init__(self, ad, t_horizon=1, n_nodes=20, q_cost=None, r_cost=None, model_name="ad_3d_acados_mpc", solver_options=None):
         """
@@ -39,7 +40,7 @@ class AD3DOptimizer:
 
                             # p_x,  p_y, psi, v_x, v_y, psi_dot, delta
         if q_cost is None:
-            q_cost = np.array([100, 100, 500, 0.0, 0.0, 1.0, 1])
+            q_cost = np.array([10, 10, 50, 0.0, 0.0, 0.0, 1])
         if r_cost is None:
             r_cost = np.array([1.0, 100.0])             
 
@@ -47,7 +48,8 @@ class AD3DOptimizer:
         self.N = n_nodes  # number of control nodes within horizon
 
         
-
+        self.valid_present = False
+        self.prev_w_opt_acados = None
         self.ad = ad
             
         #vehicle Mass in kg 
@@ -205,7 +207,7 @@ class AD3DOptimizer:
             # Compile acados OCP solver if necessary
             json_file = os.path.join(self.acados_models_dir, key_model.name + '_acados_ocp.json')
             self.acados_ocp_solver[key] = AcadosOcpSolver(ocp, json_file=json_file)
-
+           
     def clear_acados_model(self):
         """
         Removes previous stored acados models to avoid name conflicts.
@@ -380,6 +382,17 @@ class AD3DOptimizer:
         return gp_ind
 
     
+    def is_valid_command(self,x_opt, ref):
+        # the average distance between reference and the predicted trj le
+        tmp_dist = np.zeros(len(ref))        
+        for i in range(0,len(ref)-1):
+            tmp_dist[i] = math.sqrt((ref[i,0] - x_opt[i,0])**2+(ref[i,1] - x_opt[i,1])**2)
+    
+        if np.mean(tmp_dist) < 3.0 and np.cov(tmp_dist) < 2 and np.max(tmp_dist) < 4:
+            return True
+        else:
+            return False
+
     def run_optimization(self, initial_state=None, use_model=0, return_x=False, gp_regression_state=None):
         """
         Optimizes a trajectory to reach the pre-set target state, starting from the input initial state, that minimizes
@@ -437,8 +450,12 @@ class AD3DOptimizer:
             self.acados_ocp_solver[use_model].set(j, 'p', np.array([vel_switch]))
 
         # Solve OCPacados_ocp_solver
+        # if(not self.valid_present):
+        #     self.acados_ocp_solver[use_model].load_iterate(filename='solve_iteration.json')
+        #     print(" load iterate")
         solver_status = self.acados_ocp_solver[use_model].solve()
-
+        
+        
         # Get u
         w_opt_acados = np.ndarray((self.N, 2))
         x_opt_acados = np.ndarray((self.N + 1, len(x_init)))
@@ -448,4 +465,20 @@ class AD3DOptimizer:
             x_opt_acados[i + 1, :] = self.acados_ocp_solver[use_model].get(i + 1, "x")
 
         w_opt_acados = np.reshape(w_opt_acados, (-1))
+
+        if( self.is_valid_command(x_opt_acados,stacked_x_target)):
+            self.valid_present = True
+            self.prev_w_opt_acados = w_opt_acados
+            # self.acados_ocp_solver[use_model].store_iterate(filename='solve_iteration.json', overwrite=True)
+        else:
+            if(self.prev_w_opt_acados is not None):
+                w_opt_acados = np.concatenate((self.prev_w_opt_acados[2:-1],self.prev_w_opt_acados[-3:-1]))
+                print("backup ctrl")
+        
+            
+
         return w_opt_acados if not return_x else (w_opt_acados, x_opt_acados, solver_status)
+
+
+    
+    

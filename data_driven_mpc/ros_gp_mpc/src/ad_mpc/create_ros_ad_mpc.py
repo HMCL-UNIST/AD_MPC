@@ -55,8 +55,8 @@ class ROSGPMPC:
                 "terminal_cost": False
             }
                             #  p_x,  p_y, psi, v_x, v_y, psi_dot, delta 
-        q_diagonal = np.array([1.0, 1.0,  100.0, 0.0, 0.0, 0.0, 1.0])
-        r_diagonal = np.array([1, 10.0])   
+        q_diagonal = np.array([10.0, 10.0,  10.0, 0.0, 0.0, 0.0, 0.0])
+        r_diagonal = np.array([1, 100.0])   
 
         ad_mpc = AD3DMPC(ad, t_horizon=t_horizon, optimization_dt=opt_dt, n_nodes=n_mpc_nodes, 
                             model_name=ad_name, solver_options=acados_config, q_cost=q_diagonal, r_cost=r_diagonal)
