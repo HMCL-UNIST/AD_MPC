@@ -60,8 +60,8 @@ class AD3D:
         self.Cr =  self.r_mass*0.5*9.81*0.165*180/3.14195 
 
         # blend velocity  for mixing dynamical and kinamatical model
-        self.blend_max = 5
-        self.blend_min = 3
+        self.blend_max = 101
+        self.blend_min = 100
         # Input constraints        
         self.steering_min = -0.52
         self.steering_max = 0.52

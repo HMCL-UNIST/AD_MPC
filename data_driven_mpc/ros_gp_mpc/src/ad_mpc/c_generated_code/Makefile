@@ -35,29 +35,34 @@
 
 
 
+# define sources and use make's implicit rules to generate object files (*.o)
 
-ACADOS_FLAGS = -fPIC -std=c99   #-fno-diagnostics-show-line-numbers -g
-# # Debugging
-# ACADOS_FLAGS += -g3
+# model
+MODEL_SRC=
+MODEL_SRC+= sim_car_model/sim_car_expl_ode_fun.c
+MODEL_SRC+= sim_car_model/sim_car_expl_vde_forw.c
+MODEL_OBJ := $(MODEL_SRC:.c=.o)
 
-MODEL_OBJ=
-MODEL_OBJ+= sim_car_model/sim_car_expl_ode_fun.o
-MODEL_OBJ+= sim_car_model/sim_car_expl_vde_forw.o
+# optimal control problem - mostly CasADi exports
+OCP_SRC=
+OCP_SRC+= acados_solver_sim_car.c
+OCP_OBJ := $(OCP_SRC:.c=.o)
 
+# for sim solver
+SIM_SRC= acados_sim_solver_sim_car.c
+SIM_OBJ := $(SIM_SRC:.c=.o)
 
-OCP_OBJ=
-OCP_OBJ+= acados_solver_sim_car.o
+# for target example
+EX_SRC= main_sim_car.c
+EX_OBJ := $(EX_SRC:.c=.o)
+EX_EXE := $(EX_SRC:.c=)
 
+# for target example_sim
+EX_SIM_SRC= main_sim_sim_car.c
+EX_SIM_OBJ := $(EX_SIM_SRC:.c=.o)
+EX_SIM_EXE := $(EX_SIM_SRC:.c=)
 
-SIM_OBJ=
-SIM_OBJ+= acados_sim_solver_sim_car.o
-
-EX_OBJ=
-EX_OBJ+= main_sim_car.o
-
-EX_SIM_OBJ=
-EX_SIM_OBJ+= main_sim_sim_car.o
-
+# combine model, sim and ocp object files
 OBJ=
 OBJ+= $(MODEL_OBJ)
 OBJ+= $(SIM_OBJ)
@@ -68,82 +73,98 @@ EXTERNAL_LIB=
 
 INCLUDE_PATH = /home/hojin/ADplatform/hmclmobil/src/acados/include
 LIB_PATH = /home/hojin/ADplatform/hmclmobil/src/acados/lib
-all: clean casadi_fun example_sim example
+
+# preprocessor flags for make's implicit rules
+CPPFLAGS+= -I$(INCLUDE_PATH)
+CPPFLAGS+= -I$(INCLUDE_PATH)/acados
+CPPFLAGS+= -I$(INCLUDE_PATH)/blasfeo/include
+CPPFLAGS+= -I$(INCLUDE_PATH)/hpipm/include
+
+
+# define the c-compiler flags for make's implicit rules
+CFLAGS = -fPIC -std=c99   #-fno-diagnostics-show-line-numbers -g
+# # Debugging
+# CFLAGS += -g3
+
+# linker flags
+LDFLAGS+= -L$(LIB_PATH)
+
+# link to libraries
+LDLIBS+= -lacados
+LDLIBS+= -lhpipm
+LDLIBS+= -lblasfeo
+LDLIBS+= -lm
+LDLIBS+= 
+
+# libraries
+LIBACADOS_SOLVER=libacados_solver_sim_car.so
+LIBACADOS_OCP_SOLVER=libacados_ocp_solver_sim_car.so
+LIBACADOS_SIM_SOLVER=lib$(SIM_SRC:.c=.so)
+
+# virtual targets
+.PHONY : all clean
+
+#all: clean example_sim example shared_lib
+
+all: clean example_sim example
 shared_lib: bundled_shared_lib ocp_shared_lib sim_shared_lib
 
-CASADI_MODEL_SOURCE=
-CASADI_MODEL_SOURCE+= sim_car_expl_ode_fun.c
-CASADI_MODEL_SOURCE+= sim_car_expl_vde_forw.c
+# some linker targets
+example: $(EX_OBJ) $(OBJ)
+	$(CC) $^ -o $(EX_EXE) $(LDFLAGS) $(LDLIBS)
 
-casadi_fun:
-	( cd sim_car_model ; gcc $(ACADOS_FLAGS) -c $(CASADI_MODEL_SOURCE))
+example_sim: $(EX_SIM_OBJ) $(MODEL_OBJ) $(SIM_OBJ)
+	$(CC) $^ -o $(EX_SIM_EXE) $(LDFLAGS) $(LDLIBS)
 
-main:
-	gcc $(ACADOS_FLAGS) -c main_sim_car.c -I $(INCLUDE_PATH)/blasfeo/include/ -I $(INCLUDE_PATH)/hpipm/include/ \
-	-I $(INCLUDE_PATH) -I $(INCLUDE_PATH)/acados/ \
+bundled_shared_lib: $(OBJ)
+	$(CC) -shared $^ -o $(LIBACADOS_SOLVER) $(LDFLAGS) $(LDLIBS)
 
-main_sim:
-	gcc $(ACADOS_FLAGS) -c main_sim_sim_car.c -I $(INCLUDE_PATH)/blasfeo/include/ -I $(INCLUDE_PATH)/hpipm/include/ \
-	-I $(INCLUDE_PATH) -I $(INCLUDE_PATH)/acados/
+ocp_shared_lib: $(OCP_OBJ) $(MODEL_OBJ)
+	$(CC) -shared $^ -o $(LIBACADOS_OCP_SOLVER) $(LDFLAGS) $(LDLIBS) \
+	-L$(EXTERNAL_DIR) -l$(EXTERNAL_LIB)
 
-ocp_solver:
-	gcc $(ACADOS_FLAGS) -c acados_solver_sim_car.c -I $(INCLUDE_PATH)/blasfeo/include/ -I $(INCLUDE_PATH)/hpipm/include/ \
-	-I $(INCLUDE_PATH) -I $(INCLUDE_PATH)/acados/ \
+sim_shared_lib: $(SIM_OBJ) $(MODEL_OBJ)
+	$(CC) -shared $^ -o $(LIBACADOS_SIM_SOLVER) $(LDFLAGS) $(LDLIBS)
 
-sim_solver:
-	gcc $(ACADOS_FLAGS) -c acados_sim_solver_sim_car.c -I $(INCLUDE_PATH)/blasfeo/include/ -I $(INCLUDE_PATH)/hpipm/include/ \
-	-I $(INCLUDE_PATH) -I $(INCLUDE_PATH)/acados/ \
 
-example: ocp_solver main
-	gcc $(ACADOS_FLAGS) -o main_sim_car $(EX_OBJ) $(OBJ) -L $(LIB_PATH) \
-	-lacados -lhpipm -lblasfeo \
-	 \
-	-lm \
+# Cython targets
+ocp_cython_c: ocp_shared_lib
+	cython \
+	-o acados_ocp_solver_pyx.c \
+	-I $(INCLUDE_PATH)/../interfaces/acados_template/acados_template \
+	$(INCLUDE_PATH)/../interfaces/acados_template/acados_template/acados_ocp_solver_pyx.pyx \
+	-I /home/hojin/ADplatform/hmclmobil/src/data_driven_mpc/ros_gp_mpc/src/ad_mpc/c_generated_code \
+
+ocp_cython_o: ocp_cython_c
+	$(CC) $(ACADOS_FLAGS) -c -O2 \
+	-fPIC \
+	-o acados_ocp_solver_pyx.o \
+	-I /usr/include/python3.8 \
 	-I $(INCLUDE_PATH)/blasfeo/include/ \
 	-I $(INCLUDE_PATH)/hpipm/include/ \
 	-I $(INCLUDE_PATH) \
-	-I $(INCLUDE_PATH)/acados/ \
+	-I /home/hojin/ADplatform/hmclmobil/env/lib/python3.6/site-packages/numpy/core/include \
+	acados_ocp_solver_pyx.c \
 
-
-example_sim: sim_solver main_sim
-	gcc $(ACADOS_FLAGS) -o main_sim_sim_car $(EX_SIM_OBJ) $(MODEL_OBJ) $(SIM_OBJ) -L $(LIB_PATH) \
-	-lacados -lhpipm -lblasfeo \
-	 \
-	-lm \
-	-I $(INCLUDE_PATH)/blasfeo/include/ \
-	-I $(INCLUDE_PATH)/acados/ \
-
-bundled_shared_lib: casadi_fun ocp_solver sim_solver
-	gcc $(ACADOS_FLAGS) -shared -o libacados_solver_sim_car.so $(OBJ) \
-	-I $(INCLUDE_PATH)/blasfeo/include/ \
-	-I $(INCLUDE_PATH)/hpipm/include/ \
-	-I $(INCLUDE_PATH) \
-	-L $(LIB_PATH) \
-	-lacados -lhpipm -lblasfeo \
-	 \
-	-lm \
-
-ocp_shared_lib: casadi_fun ocp_solver
-	gcc $(ACADOS_FLAGS) -shared -o libacados_ocp_solver_sim_car.so $(OCP_OBJ) $(MODEL_OBJ) \
-	-I $(INCLUDE_PATH)/blasfeo/include/ \
-	-I $(INCLUDE_PATH)/hpipm/include/ \
-	-I $(INCLUDE_PATH) \
-	-L$(EXTERNAL_DIR) -l$(EXTERNAL_LIB) \
-	-L $(LIB_PATH) -lacados -lhpipm -lblasfeo \
-	 \
-	-lm \
-
-sim_shared_lib: casadi_fun sim_solver
-	gcc $(ACADOS_FLAGS) -shared -o libacados_sim_solver_sim_car.so $(SIM_OBJ) $(MODEL_OBJ) -L$(EXTERNAL_DIR) -l$(EXTERNAL_LIB) \
-	-L $(LIB_PATH) -lacados -lhpipm -lblasfeo \
-	 \
-	-lm \
+ocp_cython: ocp_cython_o
+	$(CC) $(ACADOS_FLAGS) -shared \
+	-o acados_ocp_solver_pyx.so \
+	-Wl,-rpath=$(LIB_PATH) \
+	acados_ocp_solver_pyx.o \
+	$(abspath .)/libacados_ocp_solver_sim_car.so \
+	$(LDFLAGS) $(LDLIBS)
 
 clean:
-	rm -f *.o
-	rm -f *.so
-	rm -f main_sim_car
+	$(RM) $(OBJ) $(EX_OBJ) $(EX_SIM_OBJ)
+	$(RM) $(LIBACADOS_SOLVER) $(LIBACADOS_OCP_SOLVER) $(LIBACADOS_SIM_SOLVER)
+	$(RM) $(EX_EXE) $(EX_SIM_EXE)
 
 clean_ocp_shared_lib:
-	rm -f libacados_ocp_solver_sim_car.so
-	rm -f acados_solver_sim_car.o
+	$(RM) $(LIBACADOS_OCP_SOLVER)
+	$(RM) $(OCP_OBJ)
+
+clean_ocp_cython:
+	$(RM) libacados_ocp_solver_sim_car.so
+	$(RM) acados_solver_sim_car.o
+	$(RM) acados_ocp_solver_pyx.so
+	$(RM) acados_ocp_solver_pyx.o

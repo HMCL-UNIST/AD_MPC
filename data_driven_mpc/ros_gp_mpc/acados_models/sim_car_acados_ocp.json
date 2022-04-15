@@ -1,7 +1,7 @@
 {
     "acados_include_path": "/home/hojin/ADplatform/hmclmobil/src/acados/include",
     "acados_lib_path": "/home/hojin/ADplatform/hmclmobil/src/acados/lib",
-    "code_export_directory": "c_generated_code",
+    "code_export_directory": "/home/hojin/ADplatform/hmclmobil/src/data_driven_mpc/ros_gp_mpc/src/ad_mpc/c_generated_code",
     "constraints": {
         "C": [],
         "C_e": [],
@@ -429,7 +429,7 @@
         "Vz_0": [],
         "W": [
             [
-                10.0,
+                1.0,
                 0.0,
                 0.0,
                 0.0,
@@ -441,7 +441,7 @@
             ],
             [
                 0.0,
-                10.0,
+                1.0,
                 0.0,
                 0.0,
                 0.0,
@@ -453,18 +453,7 @@
             [
                 0.0,
                 0.0,
-                500.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
+                100.0,
                 0.0,
                 0.0,
                 0.0,
@@ -501,7 +490,18 @@
                 0.0,
                 0.0,
                 0.0,
-                10.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
                 0.0,
                 0.0
             ],
@@ -525,12 +525,12 @@
                 0.0,
                 0.0,
                 0.0,
-                5.0
+                10.0
             ]
         ],
         "W_0": [
             [
-                10.0,
+                1.0,
                 0.0,
                 0.0,
                 0.0,
@@ -542,7 +542,7 @@
             ],
             [
                 0.0,
-                10.0,
+                1.0,
                 0.0,
                 0.0,
                 0.0,
@@ -554,18 +554,7 @@
             [
                 0.0,
                 0.0,
-                500.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
+                100.0,
                 0.0,
                 0.0,
                 0.0,
@@ -602,7 +591,18 @@
                 0.0,
                 0.0,
                 0.0,
-                10.0,
+                0.0,
+                0.0,
+                0.0
+            ],
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
                 0.0,
                 0.0
             ],
@@ -626,12 +626,12 @@
                 0.0,
                 0.0,
                 0.0,
-                5.0
+                10.0
             ]
         ],
         "W_e": [
             [
-                0.1,
+                0.01,
                 0.0,
                 0.0,
                 0.0,
@@ -641,7 +641,7 @@
             ],
             [
                 0.0,
-                0.1,
+                0.01,
                 0.0,
                 0.0,
                 0.0,
@@ -651,16 +651,7 @@
             [
                 0.0,
                 0.0,
-                5.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0
-            ],
-            [
-                0.0,
-                0.0,
-                0.0,
+                1.0,
                 0.0,
                 0.0,
                 0.0,
@@ -691,7 +682,16 @@
                 0.0,
                 0.0,
                 0.0,
-                0.1
+                0.0
+            ],
+            [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.01
             ]
         ],
         "Zl": [
@@ -752,6 +752,7 @@
         ],
         "zu_e": []
     },
+    "cython_include_dirs": "/home/hojin/ADplatform/hmclmobil/env/lib/python3.6/site-packages/numpy/core/include",
     "dims": {
         "N": 40,
         "nbu": 2,
@@ -791,7 +792,7 @@
         "dyn_disc_fun_jac": null,
         "dyn_disc_fun_jac_hess": null,
         "dyn_ext_fun_type": "casadi",
-        "dyn_source_discrete": null,
+        "dyn_generic_source": null,
         "gnsf": {
             "nontrivial_f_LO": 1,
             "purely_linear": 0
@@ -814,6 +815,7 @@
             "lg": 1,
             "lh": 1,
             "parameter_traj": 1,
+            "reset_solver": 0,
             "u_init": 0,
             "ubu": 1,
             "ubx": 1,
@@ -846,17 +848,23 @@
         "alpha_min": 0.05,
         "alpha_reduction": 0.7,
         "collocation_type": "GAUSS_LEGENDRE",
+        "eps_sufficient_descent": 0.0001,
         "exact_hess_constr": 1,
         "exact_hess_cost": 1,
         "exact_hess_dyn": 1,
         "ext_cost_num_hess": 0,
+        "full_step_dual": 0,
         "globalization": "FIXED_STEP",
+        "globalization_use_SOC": 0,
         "hessian_approx": "GAUSS_NEWTON",
+        "hpipm_mode": "BALANCE",
         "initialize_t_slacks": 0,
         "integrator_type": "ERK",
         "levenberg_marquardt": 0.0,
+        "line_search_use_sufficient_descent": 0,
         "model_external_shared_lib_dir": null,
         "model_external_shared_lib_name": null,
+        "nlp_solver_ext_qp_res": 0,
         "nlp_solver_max_iter": 100,
         "nlp_solver_step_length": 1.0,
         "nlp_solver_tol_comp": 1e-06,
@@ -867,7 +875,9 @@
         "print_level": 0,
         "qp_solver": "FULL_CONDENSING_HPIPM",
         "qp_solver_cond_N": null,
+        "qp_solver_cond_ric_alg": 1,
         "qp_solver_iter_max": 50,
+        "qp_solver_ric_alg": 1,
         "qp_solver_tol_comp": null,
         "qp_solver_tol_eq": null,
         "qp_solver_tol_ineq": null,

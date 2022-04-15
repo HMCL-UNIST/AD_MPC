@@ -80,21 +80,21 @@ typedef struct sim_solver_capsule
 } sim_solver_capsule;
 
 
-int sim_car_acados_sim_create(sim_solver_capsule *capsule);
-int sim_car_acados_sim_solve(sim_solver_capsule *capsule);
-int sim_car_acados_sim_free(sim_solver_capsule *capsule);
-int sim_car_acados_sim_update_params(sim_solver_capsule *capsule, double *value, int np);
+ACADOS_SYMBOL_EXPORT int sim_car_acados_sim_create(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT int sim_car_acados_sim_solve(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT int sim_car_acados_sim_free(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT int sim_car_acados_sim_update_params(sim_solver_capsule *capsule, double *value, int np);
 
-sim_config * sim_car_acados_get_sim_config(sim_solver_capsule *capsule);
-sim_in * sim_car_acados_get_sim_in(sim_solver_capsule *capsule);
-sim_out * sim_car_acados_get_sim_out(sim_solver_capsule *capsule);
-void * sim_car_acados_get_sim_dims(sim_solver_capsule *capsule);
-sim_opts * sim_car_acados_get_sim_opts(sim_solver_capsule *capsule);
-sim_solver * sim_car_acados_get_sim_solver(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT sim_config * sim_car_acados_get_sim_config(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT sim_in * sim_car_acados_get_sim_in(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT sim_out * sim_car_acados_get_sim_out(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT void * sim_car_acados_get_sim_dims(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT sim_opts * sim_car_acados_get_sim_opts(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT sim_solver * sim_car_acados_get_sim_solver(sim_solver_capsule *capsule);
 
 
-sim_solver_capsule * sim_car_acados_sim_solver_create_capsule(void);
-int sim_car_acados_sim_solver_free_capsule(sim_solver_capsule *capsule);
+ACADOS_SYMBOL_EXPORT sim_solver_capsule * sim_car_acados_sim_solver_create_capsule(void);
+ACADOS_SYMBOL_EXPORT int sim_car_acados_sim_solver_free_capsule(sim_solver_capsule *capsule);
 
 #ifdef __cplusplus
 }

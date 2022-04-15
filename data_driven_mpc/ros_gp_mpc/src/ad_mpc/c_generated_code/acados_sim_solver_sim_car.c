@@ -103,7 +103,7 @@ int sim_car_acados_sim_create(sim_solver_capsule * capsule)
     
 
     // sim plan & config
-    sim_solver_plan plan;
+    sim_solver_plan_t plan;
     plan.sim_solver = ERK;
 
     // create correct config based on plan

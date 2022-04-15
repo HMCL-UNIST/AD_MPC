@@ -24,7 +24,7 @@ from std_msgs.msg import Bool, Empty, Float64
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
-from autoware_msgs.msg import Lane, Waypoint
+from hmcl_msgs.msg import Lane, Waypoint
 from carla_msgs.msg import CarlaEgoVehicleStatus
 from ad_mpc.create_ros_ad_mpc import ROSGPMPC
 from ad_mpc.ad_3d import AD3D
@@ -117,7 +117,7 @@ class GPMPCWrapper:
             pose_topic = "/current_pose"            
             vehicle_status_topic = "/carla/ego_vehicle/vehicle_status"
             control_topic = "/carla/ego_vehicle/ackermann_cmd"            
-            waypoint_topic = "/final_waypoints"
+            waypoint_topic = "/local_traj"
             sim_odom_topic = "/carla/ego_vehicle/odometry"
         else:
             # Real world setup
@@ -200,6 +200,7 @@ class GPMPCWrapper:
             ####################################
             ## Check whether the predicted trajectory is close to the actual reference trajectory // if not apply auxillary control
             self.pred_trj_healthy = self.check_pred_trj(x_opt,ref)
+            self.pred_trj_healthy = True
             
 
             if self.solver_status > 0:                                
@@ -222,7 +223,14 @@ class GPMPCWrapper:
             control_msg.steering_angle = max(min(self.steering_max, steering_val*0.1 + self.steering), self.steering_min)                        
             tt_steering = Float64()
             tt_steering.data = -1*control_msg.steering_angle            
+            ############################################################
+            ############################################################
+            ############################################################
             # control_msg.acceleration = -110.0
+            ############################################################
+            ############################################################
+            ############################################################
+
             self.steering_pub.publish(tt_steering)            
             self.control_pub.publish(control_msg)            
             
@@ -333,11 +341,25 @@ class GPMPCWrapper:
         self.final_ref_publisher.publish(marker_refs)
     
 
+    def resample_vel(self):    
+        MAX_bound = math.sqrt(self.v_x**2 + self.v_y**2)  
+        MIN_bound = math.sqrt(self.v_x**2 + self.v_y**2)        
+        for i in range(len(self.vel_ref)):
+            if(self.vel_ref[i] > MAX_bound):
+                self.vel_ref[i] = MAX_bound
+            if(self.vel_ref[i] < MIN_bound):
+                self.vel_ref[i] = MIN_bound
+            MAX_bound = MAX_bound + self.ad.acc_max*self.dt*0.8 
+            MIN_bound = MIN_bound + self.ad.acc_min*self.dt 
+
 
     def waypoint_callback(self, msg):
         """
         :type msg: autoware_msgs/Lane 
         """                        
+        if not self.odom_available:
+            return
+
         msg.waypoints = msg.waypoints[1:-1]
         if not self.waypoint_available:
             self.waypoint_available = True
@@ -348,7 +370,10 @@ class GPMPCWrapper:
         self.psi_ref = [wrap_to_pi(quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2]) for i in range(len(msg.waypoints))]                                    
         
         self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
- 
+        #### vel_remap via current vel 
+        self.resample_vel()
+
+
         while len(self.x_ref) < self.n_mpc_nodes:
             self.x_ref.insert(-1,self.x_ref[-1])
             self.y_ref.insert(-1,self.y_ref[-1])
