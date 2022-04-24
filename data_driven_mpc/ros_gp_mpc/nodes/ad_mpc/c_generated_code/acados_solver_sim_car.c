@@ -546,8 +546,8 @@ void sim_car_acados_create_5_set_nlp_in(sim_car_solver_capsule* capsule, const i
     double* lbu = lubu;
     double* ubu = lubu + NBU;
     
-    lbu[0] = -10;
-    ubu[0] = 5;
+    lbu[0] = -5;
+    ubu[0] = 2;
     lbu[1] = -3;
     ubu[1] = 3;
 
@@ -592,8 +592,8 @@ void sim_car_acados_create_5_set_nlp_in(sim_car_solver_capsule* capsule, const i
     double* lbx = lubx;
     double* ubx = lubx + NBX;
     
-    lbx[0] = -0.52;
-    ubx[0] = 0.52;
+    lbx[0] = -0.42;
+    ubx[0] = 0.42;
 
     for (int i = 1; i < N; i++)
     {

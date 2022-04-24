@@ -10,7 +10,7 @@
     <group ns="gp_mpc">
             <!-- Node that runs the MPC -->
             <node pkg="ros_gp_mpc" type="gp_ad_mpc_node.py" name="mpc_wrapper" output="screen">
-                <rosparam file="$(find ros_gp_mpc)/config/simulation_run.yaml"/>
+                <rosparam file="$(find ros_gp_mpc)/config/usafe.yaml"/>
                 <param name="t_horizon" value="$(arg t_horizon)"/>
                 <param name="n_nodes" value="$(arg n_nodes)"/>                
                 <param name="traj_resample_vel" value="$(arg traj_resample_vel)"/>    

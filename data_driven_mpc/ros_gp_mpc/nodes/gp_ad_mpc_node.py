@@ -22,7 +22,7 @@ import math
 from tqdm import tqdm
 from std_msgs.msg import Bool, Empty, Float64
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped, Vector3Stamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
 from hmcl_msgs.msg import Lane, Waypoint, VehicleStatus
 from carla_msgs.msg import CarlaEgoVehicleStatus
@@ -41,11 +41,15 @@ from ad_mpc.ref_traj import RefTrajectory
 
 from visualization_msgs.msg import MarkerArray, Marker
 
+
+
 def clamp(n, minn, maxn):
     return max(min(maxn, n), minn)
 
+
 class GPMPCWrapper:
     def __init__(self,environment="real"):
+        
         
         self.ad = AD3D(noisy=False, noisy_input= False)
         # Control at 50 (sim) or 60 (real) hz. Use time horizon=1 and 10 nodes
@@ -74,6 +78,7 @@ class GPMPCWrapper:
         self.steering_rate_max = self.ad.steering_rate_max
 
         self.environment = environment
+        
         # Elapsed time between two recordings
         self.last_update_time = time.time()
 
@@ -115,6 +120,7 @@ class GPMPCWrapper:
         # Assume Carla simulation environment         
         if self.environment == "carla":            
             # pose_topic = "/state_estimator/estimated_pose"
+            
             pose_topic = "/current_pose"            
             vehicle_status_topic = "/carla/ego_vehicle/vehicle_status"
             control_topic = "/carla/ego_vehicle/ackermann_cmd"            
@@ -122,11 +128,11 @@ class GPMPCWrapper:
             odom_topic = "/carla/ego_vehicle/odometry"
         else:
             # Real world setup
-            pose_topic = "/geo_pose_estimate"
+            pose_topic = "/geo_pose_estimate_filtered"
             vehicle_status_topic = "/vehicle_status"
             control_topic = "/hmcl_ctrl_cmd"            
             waypoint_topic = "/local_traj"
-            odom_topic = "/pose_estimate"
+            odom_topic = "/pose_estimate_filtered"
         
         status_topic = "/is_mpc_busy"
         # Publishers
@@ -263,8 +269,7 @@ class GPMPCWrapper:
         
 
     def vehicle_status_callback(self,msg):
-        if msg.velocity is None:
-            return
+  
         
         if self.environment == "carla":   
             if msg.velocity is None:
@@ -275,7 +280,7 @@ class GPMPCWrapper:
             if msg.wheelspeed.wheel_speed is None:
                 return
             self.velocity = msg.wheelspeed.wheel_speed
-            self.steering = msg.steering_info.steering_angle
+            self.steering = msg.steering_info.steering_angle/12.5
 
         if self.vehicle_status_available is False:
             self.vehicle_status_available = True        
@@ -369,7 +374,7 @@ class GPMPCWrapper:
         if not self.odom_available:
             return
 
-        msg.waypoints = msg.waypoints[0:-1]
+        msg.waypoints = msg.waypoints[1:-1]
         if not self.waypoint_available:
             self.waypoint_available = True
         
@@ -395,8 +400,31 @@ class GPMPCWrapper:
     def odom_callback(self, msg):
         if self.odom_available is False:
             self.odom_available = True  
-        self.v_x = msg.twist.twist.linear.x 
-        self.v_y = msg.twist.twist.linear.y
+        
+        if self.environment == "carla":   
+            self.v_x = msg.twist.twist.linear.x 
+            self.v_y = msg.twist.twist.linear.y
+        else:
+            # global to local frame 
+            quat_ = [msg.pose.pose.orientation.w,msg.pose.pose.orientation.x,msg.pose.pose.orientation.y,msg.pose.pose.orientation.z]
+            euler_ = quaternion_to_euler(quat_)
+            yaw = euler_[2] 
+            global_x = np.array([msg.twist.twist.linear.x , 0.0])   # vector in global x 
+            global_y = np.array([0.0, msg.twist.twist.linear.y])   # vector in global x 
+            l_x_ = np.array([cos(yaw), sin(yaw)])   # vector v:
+            l_y_ = np.array([cos(yaw+np.pi/2.0), sin(yaw+np.pi/2.0)])   # vector v:
+
+            proj_of_global_x_on_l_x = (np.dot(global_x, l_x_))*l_x_        
+            proj_of_global_y_on_l_x = (np.dot(global_y, l_x_))*l_x_        
+
+            proj_of_global_x_on_l_y = (np.dot(global_x, l_y_))*l_y_        
+            proj_of_global_y_on_l_y = (np.dot(global_y, l_y_))*l_y_        
+
+            self.v_x = np.sqrt(proj_of_global_x_on_l_x**2 + proj_of_global_y_on_l_x**2)
+            self.v_y = np.sqrt(proj_of_global_x_on_l_y**2 + proj_of_global_y_on_l_y**2)
+
+            print("V_X = " + str(self.v_x) + "    V_Y = "+ str(self.v_y))
+            
         self.psi_dot = msg.twist.twist.angular.z
                 
 
