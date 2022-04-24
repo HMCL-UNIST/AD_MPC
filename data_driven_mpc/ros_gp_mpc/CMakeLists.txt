@@ -10,10 +10,11 @@ project(ros_gp_mpc)
 find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
-  message_generation
   ackermann_msgs
   hmcl_msgs
   carla_msgs
+  nav_msgs
+  geometry_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -50,10 +51,10 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-add_message_files(
-  FILES
-  ReferenceTrajectory.msg
-)
+# add_message_files(
+#   FILES
+#   ReferenceTrajectory.msg
+# )
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -70,10 +71,10 @@ add_message_files(
 # )
 
 ## Generate added messages and services with any dependencies listed here
-generate_messages(
-  DEPENDENCIES
-  std_msgs  # Or other packages containing msgs
-)
+# generate_messages(
+#   DEPENDENCIES
+#   std_msgs  # Or other packages containing msgs
+# )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -105,15 +106,16 @@ generate_messages(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
 #  LIBRARIES ros_python3_issues
-   CATKIN_DEPENDS message_runtime
+   CATKIN_DEPENDS hmcl_msgs std_msgs nav_msgs geometry_msgs ackermann_msgs carla_msgs
 #  DEPENDS system_lib
 )
 
 ###########
 ## Build ##
 ###########
+
+
 
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations

@@ -24,8 +24,9 @@ from std_msgs.msg import Bool, Empty, Float64
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
-from hmcl_msgs.msg import Lane, Waypoint
+from hmcl_msgs.msg import Lane, Waypoint, VehicleStatus
 from carla_msgs.msg import CarlaEgoVehicleStatus
+
 from ad_mpc.create_ros_ad_mpc import ROSGPMPC
 from ad_mpc.ad_3d import AD3D
 from utils.utils import jsonify, interpol_mse, quaternion_state_mse, load_pickled_models, v_dot_q, \
@@ -44,7 +45,7 @@ def clamp(n, minn, maxn):
     return max(min(maxn, n), minn)
 
 class GPMPCWrapper:
-    def __init__(self,environment="carla"):
+    def __init__(self,environment="real"):
         
         self.ad = AD3D(noisy=False, noisy_input= False)
         # Control at 50 (sim) or 60 (real) hz. Use time horizon=1 and 10 nodes
@@ -118,13 +119,14 @@ class GPMPCWrapper:
             vehicle_status_topic = "/carla/ego_vehicle/vehicle_status"
             control_topic = "/carla/ego_vehicle/ackermann_cmd"            
             waypoint_topic = "/local_traj"
-            sim_odom_topic = "/carla/ego_vehicle/odometry"
+            odom_topic = "/carla/ego_vehicle/odometry"
         else:
             # Real world setup
-            pose_topic = "/ndt_pose"
-            vehicle_status_topic = "/hmcl_vehicle_status"
+            pose_topic = "/geo_pose_estimate"
+            vehicle_status_topic = "/vehicle_status"
             control_topic = "/hmcl_ctrl_cmd"            
-            waypoint_topic = "/final_waypoints"
+            waypoint_topic = "/local_traj"
+            odom_topic = "/pose_estimate"
         
         status_topic = "/is_mpc_busy"
         # Publishers
@@ -136,9 +138,12 @@ class GPMPCWrapper:
         self.steering_pub = rospy.Publisher("/mpc_steering", Float64, queue_size=1)
         # Subscribers
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_callback)
-        self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
+        if self.environment == "carla":   
+            self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
+        else:
+            self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, VehicleStatus, self.vehicle_status_callback)
         self.waypoint_sub = rospy.Subscriber(waypoint_topic, Lane, self.waypoint_callback)
-        self.odom_sub = rospy.Subscriber(sim_odom_topic, Odometry, self.odom_callback)
+        self.odom_sub = rospy.Subscriber(odom_topic, Odometry, self.odom_callback)
         self.blend_min = 3
         self.blend_max = 5
 
@@ -260,8 +265,17 @@ class GPMPCWrapper:
     def vehicle_status_callback(self,msg):
         if msg.velocity is None:
             return
-        self.velocity = msg.velocity
-        self.steering = -msg.control.steer
+        
+        if self.environment == "carla":   
+            if msg.velocity is None:
+                return
+            self.velocity = msg.velocity
+            self.steering = -msg.control.steer
+        else:
+            if msg.wheelspeed.wheel_speed is None:
+                return
+            self.velocity = msg.wheelspeed.wheel_speed
+            self.steering = msg.steering_info.steering_angle
 
         if self.vehicle_status_available is False:
             self.vehicle_status_available = True        
@@ -485,7 +499,7 @@ class GPMPCWrapper:
 
 def main():
     rospy.init_node("gp_mpc")
-    env = rospy.get_param('~environment', default='gazebo')
+    env = rospy.get_param('~environment', default='real')
     GPMPCWrapper(env)
 
 if __name__ == "__main__":
