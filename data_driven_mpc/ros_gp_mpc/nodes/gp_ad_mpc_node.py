@@ -22,9 +22,9 @@ import math
 from tqdm import tqdm
 from std_msgs.msg import Bool, Empty, Float64
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseStamped, TransformStamped, Vector3Stamped
+from geometry_msgs.msg import PoseStamped, TransformStamped, Vector3Stamped, Pose
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
-from hmcl_msgs.msg import Lane, Waypoint, VehicleStatus
+from hmcl_msgs.msg import Lane, Waypoint, VehicleStatus, VehicleSteering
 from carla_msgs.msg import CarlaEgoVehicleStatus
 
 from ad_mpc.create_ros_ad_mpc import ROSGPMPC
@@ -70,7 +70,9 @@ class GPMPCWrapper:
         # Last state obtained from odometry
         self.x = None
         self.velocity = None
-        self.steering = None
+        self.steering = None        
+        
+        self.pose_sub_count = 0
         
         self.steering_min = self.ad.steering_min
         self.steering_max = self.ad.steering_max
@@ -128,11 +130,11 @@ class GPMPCWrapper:
             odom_topic = "/carla/ego_vehicle/odometry"
         else:
             # Real world setup
-            pose_topic = "/geo_pose_estimate_filtered"
+            pose_topic = "/geo_pose_estimate"
             vehicle_status_topic = "/vehicle_status"
             control_topic = "/hmcl_ctrl_cmd"            
             waypoint_topic = "/local_traj"
-            odom_topic = "/pose_estimate_filtered"
+            odom_topic = "/pose_estimate"
         
         status_topic = "/is_mpc_busy"
         # Publishers
@@ -141,7 +143,15 @@ class GPMPCWrapper:
         self.mpc_predicted_trj_publisher = rospy.Publisher("/mpc_pred_trajectory", MarkerArray, queue_size=1)
         self.final_ref_publisher = rospy.Publisher("/final_trajectory", MarkerArray, queue_size=1)
         self.status_pub = rospy.Publisher(status_topic, Bool, queue_size=1)
-        self.steering_pub = rospy.Publisher("/mpc_steering", Float64, queue_size=1)
+        if self.environment == "carla":
+            self.steering_pub = rospy.Publisher("/mpc_steering", Float64, queue_size=1)
+        else:
+            self.steering_pub = rospy.Publisher("/usafe_steer_cmd", VehicleSteering, queue_size=1)
+        
+        ##debugging
+        self.debugging_pub = rospy.Publisher("/mpc_debug", Pose, queue_size=1)
+        
+        
         # Subscribers
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_callback)
         if self.environment == "carla":   
@@ -150,8 +160,8 @@ class GPMPCWrapper:
             self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, VehicleStatus, self.vehicle_status_callback)
         self.waypoint_sub = rospy.Subscriber(waypoint_topic, Lane, self.waypoint_callback)
         self.odom_sub = rospy.Subscriber(odom_topic, Odometry, self.odom_callback)
-        self.blend_min = 3
-        self.blend_max = 5
+        # self.blend_min = 3
+        # self.blend_max = 5
 
         rate = rospy.Rate(1)
      
@@ -225,15 +235,21 @@ class GPMPCWrapper:
 
             if not self.pred_trj_healthy:
                 return
-
+            
             self.optimization_dt += time.time() - tic
             print("MPC thread. Seq: %d. Topt: %.4f" % (odom.header.seq, (time.time() - tic) * 1000))            
             control_msg = AckermannDrive()
             control_msg = next_control.drive                                                                     
+            # if self.environment == "carla":
+            #     steering_val = max(min(self.steering_rate_max, next_control.drive.steering_angle_velocity), self.steering_rate_min)                        
+            #     control_msg.steering_angle = max(min(self.steering_max, steering_val*0.1 + self.steering), self.steering_min)                        
+            # else:
+            # control_msg.steering_angle = max(min(self.steering_max, next_control.drive.steering_angle ), self.steering_min)                      
+            
+            
             steering_val = max(min(self.steering_rate_max, next_control.drive.steering_angle_velocity), self.steering_rate_min)                        
-            control_msg.steering_angle = max(min(self.steering_max, steering_val*0.1 + self.steering), self.steering_min)                        
-            tt_steering = Float64()
-            tt_steering.data = -1*control_msg.steering_angle            
+            control_msg.steering_angle = max(min(self.steering_max, steering_val*0.02 + self.steering), self.steering_min)                          
+                
             ############################################################
             ############################################################
             ############################################################
@@ -241,8 +257,15 @@ class GPMPCWrapper:
             ############################################################
             ############################################################
             ############################################################
+            if self.environment == "carla":   
+                tt_steering = Float64()
+                tt_steering.data = -1*control_msg.steering_angle    
+                self.steering_pub.publish(tt_steering)            
+            else:
+                steer_msg = VehicleSteering()
+                steer_msg.steering_angle = control_msg.steering_angle            
+                self.steering_pub.publish(steer_msg)            
 
-            self.steering_pub.publish(tt_steering)            
             self.control_pub.publish(control_msg)            
             
 
@@ -383,7 +406,7 @@ class GPMPCWrapper:
         quat_to_euler_lambda = lambda o: quaternion_to_euler([o[0], o[1], o[2], o[3]])            
         self.psi_ref = [wrap_to_pi(quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2]) for i in range(len(msg.waypoints))]                                    
         
-        self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
+        self.vel_ref = [msg.waypoints[i].twist.twist.linear.x*3.0 for i in range(len(msg.waypoints))]
         #### vel_remap via current vel 
         self.resample_vel()
 
@@ -409,21 +432,33 @@ class GPMPCWrapper:
             quat_ = [msg.pose.pose.orientation.w,msg.pose.pose.orientation.x,msg.pose.pose.orientation.y,msg.pose.pose.orientation.z]
             euler_ = quaternion_to_euler(quat_)
             yaw = euler_[2] 
-            global_x = np.array([msg.twist.twist.linear.x , 0.0])   # vector in global x 
-            global_y = np.array([0.0, msg.twist.twist.linear.y])   # vector in global x 
-            l_x_ = np.array([cos(yaw), sin(yaw)])   # vector v:
-            l_y_ = np.array([cos(yaw+np.pi/2.0), sin(yaw+np.pi/2.0)])   # vector v:
+            # print("yaw = " + str(yaw*180/np.pi))
+            global_x = msg.twist.twist.linear.x  # vector in global x 
+            global_y = msg.twist.twist.linear.y # vector in global x 
+            # l_x_ = np.array([np.cos(yaw), np.sin(yaw)])   # vector v:
+            # l_y_ = np.array([np.cos(yaw+np.pi/2.0), np.sin(yaw+np.pi/2.0)])   # vector v:
+            # # print("l_x = "+str(l_x_[0])+" " +str(l_x_[1]) + ",  l_y = " +str(l_y_[0])+" " +str(l_y_[1]))
+            
+            # proj_of_global_x_on_l_x = l_x_ * np.dot(global_x, l_x_) / np.dot(l_x_, l_x_)
+            # proj_of_global_y_on_l_x = l_x_ * np.dot(global_y, l_x_) / np.dot(l_x_, l_x_)
+           
+            # proj_of_global_x_on_l_y = l_y_ * np.dot(global_x, l_y_) / np.dot(l_y_, l_y_)
+            # proj_of_global_y_on_l_y =  l_y_ * np.dot(global_y, l_y_) / np.dot(l_y_, l_y_)
+            self.v_x = global_x*np.cos(-1*yaw) - global_y*np.sin(-1*yaw)
+            self.v_y = global_x*np.sin(-1*yaw) + global_y*np.cos(-1*yaw)
+            # proj_of_global_x_on_l_x = (np.dot(global_x, l_x_))*l_x_        
+            # proj_of_global_y_on_l_x = (np.dot(global_y, l_x_))*l_x_        
 
-            proj_of_global_x_on_l_x = (np.dot(global_x, l_x_))*l_x_        
-            proj_of_global_y_on_l_x = (np.dot(global_y, l_x_))*l_x_        
+            # proj_of_global_x_on_l_y = (np.dot(global_x, l_y_))*l_y_        
+            # proj_of_global_y_on_l_y = (np.dot(global_y, l_y_))*l_y_        
 
-            proj_of_global_x_on_l_y = (np.dot(global_x, l_y_))*l_y_        
-            proj_of_global_y_on_l_y = (np.dot(global_y, l_y_))*l_y_        
+            # self.v_x = (proj_of_global_x_on_l_x + proj_of_global_y_on_l_x)[0]
+            # self.v_y = (proj_of_global_x_on_l_y + proj_of_global_y_on_l_y)[0]
+            debug_msg = Pose()
+            debug_msg.position.x = self.v_x
+            debug_msg.position.y = self.v_y
+            self.debugging_pub.publish(debug_msg)
 
-            self.v_x = np.sqrt(proj_of_global_x_on_l_x**2 + proj_of_global_y_on_l_x**2)
-            self.v_y = np.sqrt(proj_of_global_x_on_l_y**2 + proj_of_global_y_on_l_y**2)
-
-            print("V_X = " + str(self.v_x) + "    V_Y = "+ str(self.v_y))
             
         self.psi_dot = msg.twist.twist.angular.z
                 
@@ -450,6 +485,12 @@ class GPMPCWrapper:
         steering = [self.steering]
 
         self.x = p_x+p_y+psi+v_x+v_y+psi_dot+steering
+        self.pose_sub_count = self.pose_sub_count+1
+        if self.pose_sub_count < 2:
+            return
+        else:
+            self.pose_sub_count = 0
+        
         
         try:
             if self.mpc_ready:
@@ -513,7 +554,7 @@ class GPMPCWrapper:
             tic = time.time()                        
             control_msg = AckermannDrive()                        
             control_msg.steering_angle =  self.steering 
-            control_msg.acceleration = -1e5          
+            control_msg.acceleration = -3          
             self.control_pub.publish(control_msg)            
             
 

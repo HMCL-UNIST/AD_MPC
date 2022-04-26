@@ -378,11 +378,11 @@ void sim_car_acados_create_5_set_nlp_in(sim_car_solver_capsule* capsule, const i
     /**** Cost ****/
     double* W_0 = calloc(NY0*NY0, sizeof(double));
     // change only the non-zero elements:
-    W_0[0+(NY0) * 0] = 10;
-    W_0[1+(NY0) * 1] = 10;
+    W_0[0+(NY0) * 0] = 1;
+    W_0[1+(NY0) * 1] = 1;
     W_0[2+(NY0) * 2] = 100;
     W_0[7+(NY0) * 7] = 1;
-    W_0[8+(NY0) * 8] = 100;
+    W_0[8+(NY0) * 8] = 1;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, 0, "W", W_0);
     free(W_0);
 
@@ -392,11 +392,11 @@ void sim_car_acados_create_5_set_nlp_in(sim_car_solver_capsule* capsule, const i
     free(yref_0);
     double* W = calloc(NY*NY, sizeof(double));
     // change only the non-zero elements:
-    W[0+(NY) * 0] = 10;
-    W[1+(NY) * 1] = 10;
+    W[0+(NY) * 0] = 1;
+    W[1+(NY) * 1] = 1;
     W[2+(NY) * 2] = 100;
     W[7+(NY) * 7] = 1;
-    W[8+(NY) * 8] = 100;
+    W[8+(NY) * 8] = 1;
 
     double* yref = calloc(NY, sizeof(double));
     // change only the non-zero elements:
@@ -480,8 +480,8 @@ void sim_car_acados_create_5_set_nlp_in(sim_car_solver_capsule* capsule, const i
 
     double* W_e = calloc(NYN*NYN, sizeof(double));
     // change only the non-zero elements:
-    W_e[0+(NYN) * 0] = 0.00001;
-    W_e[1+(NYN) * 1] = 0.00001;
+    W_e[0+(NYN) * 0] = 0.000001;
+    W_e[1+(NYN) * 1] = 0.000001;
     W_e[2+(NYN) * 2] = 0.0001;
     ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, N, "W", W_e);
     free(W_e);
