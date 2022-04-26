@@ -2,8 +2,8 @@
 <launch>
     <!-- true if running the nodes in the gazebo simulator environment. false if running on the real platform-->
     
-    <arg name="t_horizon" default="2"/>
-    <arg name="n_nodes" default="40"/>
+    <arg name="t_horizon" default="1"/>
+    <arg name="n_nodes" default="100"/>
     <arg name="traj_resample_vel" default="true"/>
 
 

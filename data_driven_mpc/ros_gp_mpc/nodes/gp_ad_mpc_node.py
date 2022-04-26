@@ -24,7 +24,7 @@ from std_msgs.msg import Bool, Empty, Float64
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped, TransformStamped, Vector3Stamped, Pose
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
-from hmcl_msgs.msg import Lane, Waypoint, VehicleStatus, VehicleSteering
+from hmcl_msgs.msg import Lane, Waypoint, VehicleStatus, VehicleSteering, VehicleSCC
 from carla_msgs.msg import CarlaEgoVehicleStatus
 
 from ad_mpc.create_ros_ad_mpc import ROSGPMPC
@@ -135,9 +135,11 @@ class GPMPCWrapper:
             control_topic = "/hmcl_ctrl_cmd"            
             waypoint_topic = "/local_traj"
             odom_topic = "/pose_estimate"
+            scc_topioc = "/usafe_acc_cmd"
         
         status_topic = "/is_mpc_busy"
         # Publishers
+        self.scc_pub = rospy.Publisher(scc_topioc, VehicleSCC, queue_size=2, tcp_nodelay=True)
         self.control_pub = rospy.Publisher(control_topic, AckermannDrive, queue_size=1, tcp_nodelay=True)
         self.ref_puf_publisher = rospy.Publisher("/mpc_ref_trajectory", MarkerArray, queue_size=1)
         self.mpc_predicted_trj_publisher = rospy.Publisher("/mpc_pred_trajectory", MarkerArray, queue_size=1)
@@ -265,6 +267,10 @@ class GPMPCWrapper:
                 steer_msg = VehicleSteering()
                 steer_msg.steering_angle = control_msg.steering_angle            
                 self.steering_pub.publish(steer_msg)            
+                acc_msg = VehicleScc()
+                acc_msg.acceleration = w_opt[0]
+                self.scc_pub.publish(acc_msg)
+
 
             self.control_pub.publish(control_msg)            
             
