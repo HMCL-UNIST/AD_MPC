@@ -22,13 +22,13 @@ from std_msgs.msg import Bool, Float64
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseStamped
 from ackermann_msgs.msg import AckermannDrive, AckermannDriveStamped 
-from hmcl_msgs.msg import Lane
+from hmcl_msgs.msg import Lane, VehicleSteering, VehicleStatus
 from carla_msgs.msg import CarlaEgoVehicleStatus
-from geo_ctrls.stanley_node.nodes.ad_3d import AD3D
+from ad_3d import AD3D
 from utils.utils import quaternion_to_euler,  unit_quat,  wrap_to_pi, euler_to_quaternion
-from geo_ctrls.stanley_node.nodes.ref_traj import RefTrajectory
+from ref_traj import RefTrajectory
 import std_msgs.msg
-
+from std_msgs.msg import Float64
 from visualization_msgs.msg import MarkerArray, Marker
 
 
@@ -91,28 +91,37 @@ class Stanley_ctrl:
             vehicle_status_topic = "/carla/ego_vehicle/vehicle_status"
             control_topic = "/carla/ego_vehicle/ackermann_cmd"            
             waypoint_topic = "/local_traj"
-            sim_odom_topic = "/carla/ego_vehicle/odometry"
+            odom_topic = "/carla/ego_vehicle/odometry"
             status_topic = "/is_mpc_busy"
         else:
             # Real world setup
-            pose_topic = "/ndt_pose"
-            vehicle_status_topic = "/hmcl_vehicle_status"
+            pose_topic = "/geo_pose_estimate"
+            vehicle_status_topic = "/vehicle_status"
             control_topic = "/hmcl_ctrl_cmd"            
-            waypoint_topic = "/final_waypoints"
-            status_topic = "/is_mpc_busy"
+            waypoint_topic = "/local_traj"
+            odom_topic = "/pose_estimate"
         
-        
+        status_topic = "/is_mpc_busy"
         # Publishers
         self.control_pub = rospy.Publisher(control_topic, AckermannDrive, queue_size=1, tcp_nodelay=True)
         self.ref_puf_publisher = rospy.Publisher("/mpc_ref_trajectory", MarkerArray, queue_size=1)
         self.status_pub = rospy.Publisher(status_topic, Bool, queue_size=1)
-        self.steering_pub = rospy.Publisher("/mpc_steering", Float64, queue_size=1)
+        self.vel_setpoint_pub = rospy.Publisher("/setpoint",Float64, queue_size = 5)
+        if self.environment == "carla":
+            self.steering_pub = rospy.Publisher("/mpc_steering", Float64, queue_size=1)
+        else:
+            self.steering_pub = rospy.Publisher("/usafe_steer_cmd", VehicleSteering, queue_size=1)
         # Subscribers
         self.pose_sub = rospy.Subscriber(pose_topic, PoseStamped, self.pose_callback)
-        self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
+        if self.environment == "carla":   
+            self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, CarlaEgoVehicleStatus, self.vehicle_status_callback)
+        else:
+            self.vehicle_status_sub = rospy.Subscriber(vehicle_status_topic, VehicleStatus, self.vehicle_status_callback)
         self.waypoint_sub = rospy.Subscriber(waypoint_topic, Lane, self.waypoint_callback)
-        self.odom_sub = rospy.Subscriber(sim_odom_topic, Odometry, self.odom_callback)
+        self.odom_sub = rospy.Subscriber(odom_topic, Odometry, self.odom_callback)
+
         self.ref_gen = RefTrajectory(traj_horizon=self.n_nodes, traj_dt=self.dt)
+
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             msg = Bool()
@@ -183,7 +192,7 @@ class Stanley_ctrl:
         quat_to_euler_lambda = lambda o: quaternion_to_euler([o[0], o[1], o[2], o[3]])            
         self.psi_ref = [wrap_to_pi(quat_to_euler_lambda([msg.waypoints[i].pose.pose.orientation.w,msg.waypoints[i].pose.pose.orientation.x,msg.waypoints[i].pose.pose.orientation.y,msg.waypoints[i].pose.pose.orientation.z])[2]) for i in range(len(msg.waypoints))]                                    
         
-        self.vel_ref = [msg.waypoints[i].twist.twist.linear.x for i in range(len(msg.waypoints))]
+        self.vel_ref = [msg.waypoints[i].twist.twist.linear.x*3 for i in range(len(msg.waypoints))]
         #### vel_remap via current vel 
         self.resample_vel()
         
@@ -200,9 +209,20 @@ class Stanley_ctrl:
     def odom_callback(self, msg):
         if self.odom_available is False:
             self.odom_available = True  
-        self.v_x = msg.twist.twist.linear.x 
-        self.v_y = msg.twist.twist.linear.y
+        if self.environment == "carla":   
+            self.v_x = msg.twist.twist.linear.x 
+            self.v_y = msg.twist.twist.linear.y
+        else:
+            # global to local frame 
+            quat_ = [msg.pose.pose.orientation.w,msg.pose.pose.orientation.x,msg.pose.pose.orientation.y,msg.pose.pose.orientation.z]
+            euler_ = quaternion_to_euler(quat_)
+            yaw = euler_[2] 
+            global_x = msg.twist.twist.linear.x  # vector in global x 
+            global_y = msg.twist.twist.linear.y # vector in global x 
+            self.v_x = global_x*np.cos(-1*yaw) - global_y*np.sin(-1*yaw)
+            self.v_y = global_x*np.sin(-1*yaw) + global_y*np.cos(-1*yaw)
         self.psi_dot = msg.twist.twist.angular.z
+        
                 
     def calc_target_index(self,current_state, waypoint_dict):
         fx = current_state[0] + self.ad.L/2.0 * np.cos(current_state[2])
@@ -296,9 +316,16 @@ class Stanley_ctrl:
         control_msg.steering_angle = max(min(self.steering_max, delta), self.steering_min)                        
         tt_steering = Float64()
         tt_steering.data = -1*control_msg.steering_angle            
-   
-        self.steering_pub.publish(tt_steering)            
-        self.control_pub.publish(control_msg)   
+        if self.environment == "carla":
+            self.steering_pub.publish(tt_steering)            
+            self.control_pub.publish(control_msg)   
+        else:
+            steering_msg = VehicleSteering()
+            steering_msg.steering_angle = control_msg.steering_angle
+            self.steering_pub.publish(steering_msg)
+            vel_msg = Float64()
+            vel_msg.data = vel_ref[0]
+            self.vel_setpoint_pub.publish(vel_msg)
 
      
 ###################################################################################
