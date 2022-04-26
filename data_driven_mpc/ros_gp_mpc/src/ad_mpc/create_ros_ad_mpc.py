@@ -95,7 +95,7 @@ class ROSGPMPC:
         next_control_with_stamp.drive.steering_angle = x_opt[0,6]
         next_control_with_stamp.drive.steering_angle_velocity = w_opt[1]        
         next_control_with_stamp.drive.speed = x_opt[0,3]                
-        next_control_with_stamp.drive.acceleration =  w_opt[0]        
+        next_control_with_stamp.drive.acceleration =  2# w_opt[0]        
         # next_control_with_stamp.jerk = 
 
         return next_control_with_stamp, w_opt, x_opt, solver_status
