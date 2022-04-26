@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- true if running the nodes in the gazebo simulator environment. false if running on the real platform-->
+    
+    <arg name="t_horizon" default="2"/>
+    <arg name="n_nodes" default="40"/>
+    <arg name="traj_resample_vel" default="true"/>
+
+
+    <node pkg="stanley_ctrl" type="stanley_node.py" name="stanley_ctrl" output="screen">
+        <rosparam file="$(find stanley_ctrl)/config/usafe.yaml"/>
+        <param name="t_horizon" value="$(arg t_horizon)"/>
+        <param name="n_nodes" value="$(arg n_nodes)"/>                
+        <param name="traj_resample_vel" value="$(arg traj_resample_vel)"/>    
+    </node>
+
+
+</launch>
