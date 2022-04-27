@@ -130,9 +130,13 @@ class RefTrajectory():
 		while len(vel_references) < self.traj_horizon+1:
 			vel_references = np.concatenate((vel_references, [0.01]))
 		
-		interp_to_fit = [self.traj_dt*vel_references[0]]
+		# interp_to_fit = [self.traj_dt*vel_references[0]]
+		# for h in range(1,self.traj_horizon):
+		# 	interp_to_fit.append(interp_to_fit[-1]+self.traj_dt*vel_references[h])
+
+		interp_to_fit = [self.traj_dt*1]
 		for h in range(1,self.traj_horizon):
-			interp_to_fit.append(interp_to_fit[-1]+self.traj_dt*vel_references[h])
+			interp_to_fit.append(interp_to_fit[-1]+self.traj_dt*1)
 		# interp_to_fit = [h*self.traj_dt*vel_references[h] + start_dist for h in range(1, self.traj_horizon+1)]
 		
 		for waypoint_key in ['x', 'y', 'psi', 'cdist', 'curv']:
@@ -158,17 +162,17 @@ class RefTrajectory():
 		
 		
 		
-		points_from_init = np.linspace(X_init,waypoint_dict['x_ref'][1],3)		
-		waypoint_dict['x_ref'] = np.hstack([points_from_init, waypoint_dict['x_ref'][2:-1]])
+		# points_from_init = np.linspace(X_init,waypoint_dict['x_ref'][1],3)		
+		# waypoint_dict['x_ref'] = np.hstack([points_from_init, waypoint_dict['x_ref'][2:-1]])
 
-		points_from_init = np.linspace(Y_init,waypoint_dict['y_ref'][1],3)		
-		waypoint_dict['y_ref'] = np.hstack([points_from_init, waypoint_dict['y_ref'][2:-1]])
+		# points_from_init = np.linspace(Y_init,waypoint_dict['y_ref'][1],3)		
+		# waypoint_dict['y_ref'] = np.hstack([points_from_init, waypoint_dict['y_ref'][2:-1]])
 		
-		points_from_init = np.ones(3)*waypoint_dict['psi_ref'][0]		
-		waypoint_dict['psi_ref'] = np.hstack([points_from_init, waypoint_dict['psi_ref'][2:-1]])
+		# points_from_init = np.ones(3)*waypoint_dict['psi_ref'][0]		
+		# waypoint_dict['psi_ref'] = np.hstack([points_from_init, waypoint_dict['psi_ref'][2:-1]])
 
-		points_from_init = np.ones(3)*waypoint_dict['v_ref'][2]		
-		waypoint_dict['v_ref'] = np.hstack([points_from_init, waypoint_dict['v_ref'][2:-1]])
+		# points_from_init = np.ones(3)*waypoint_dict['v_ref'][2]		
+		# waypoint_dict['v_ref'] = np.hstack([points_from_init, waypoint_dict['v_ref'][2:-1]])
 
 		
 

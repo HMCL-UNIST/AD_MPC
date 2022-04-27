@@ -63,12 +63,12 @@ class AD3D:
         self.blend_max = 110
         self.blend_min = 100
         # Input constraints        
-        self.steering_min = -0.42
-        self.steering_max = 0.42
-        self.steering_rate_min = -3 # rate of steering angle [rad/s]
-        self.steering_rate_max = 3 # rate of steering angle [rad/s]
+        self.steering_min = -0.62
+        self.steering_max = 0.62
+        self.steering_rate_min = -0.2 # rate of steering angle [rad/s]
+        self.steering_rate_max = 0.2 # rate of steering angle [rad/s]
         self.acc_min = -5
-        self.acc_max = 2
+        self.acc_max = 1.0
 
         self.noisy_input = False
         self.noisy = noisy

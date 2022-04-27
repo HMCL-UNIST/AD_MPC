@@ -62,9 +62,12 @@ class RefTrajectory():
 		self.vel_ref = []
 		self.trajectory = []
 		self.access_map = []
-
+		self.getting_waypoints = False
 	
 	def set_traj(self,x_ref, y_ref, psi_ref, vel_ref):
+		if self.getting_waypoints:
+			return
+		
 		Xs = []
 		Ys = []
 		cdists = []
@@ -87,9 +90,12 @@ class RefTrajectory():
 	
 	# Main callback function to get the waypoints from the vehicle's initial pose and the prerecorded global trajectory.
 	def get_waypoints(self, X_init, Y_init, psi_init):
+		self.getting_waypoints = True
+		tic = time.time()     
 		
 		if self.access_map is None:
 			rospy.loginfo("trajectory has not been set")
+			self.getting_waypoints = False
 			return
 		psi_init = bound_angle_within_pi(psi_init)
 
@@ -166,6 +172,7 @@ class RefTrajectory():
 		points_from_init = np.ones(3)*waypoint_dict['v_ref'][2]		
 		waypoint_dict['v_ref'] = np.hstack([points_from_init, waypoint_dict['v_ref'][2:-1]])
 
-		
-
+		self.getting_waypoints = False
+	
+		# print("waypoint thread. Topt: %.4f" % ((time.time() - tic) * 1000))            
 		return waypoint_dict # keys ['s0', 'e_y0, 'e_psi0', 'x_ref', 'y_ref', 'psi_ref', 'cdist_ref', 'curv_ref2

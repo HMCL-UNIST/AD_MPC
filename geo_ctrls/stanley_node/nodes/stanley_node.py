@@ -46,12 +46,14 @@ class Stanley_ctrl:
 #################################################################        
         self.last_target_idx = 0
         self.current_target_idx = 0 
-        self.stanley_gain_k = 0.5
+        self.stanley_gain_k = 0.1
 #################################################################
         # Last state obtained from odometry
         self.x = None
         self.velocity = None
         self.steering = None
+        self.prev_steering = None
+        self.L_pass_ = 0.1
 
         self.steering_min = self.ad.steering_min
         self.steering_max = self.ad.steering_max
@@ -131,13 +133,28 @@ class Stanley_ctrl:
 
 
     def vehicle_status_callback(self,msg):
-        if msg.velocity is None:
-            return
-        self.velocity = msg.velocity
-        self.steering = -msg.control.steer
+        # if msg.velocity is None:
+        #     return
+        # self.velocity = msg.velocity
+        # self.steering = -msg.control.steer
+
+        # if self.vehicle_status_available is False:
+        #     self.vehicle_status_available = True   
+
+        
+        if self.environment == "carla":   
+            if msg.velocity is None:
+                return
+            self.velocity = msg.velocity
+            self.steering = -msg.control.steer
+        else:
+            if msg.wheelspeed.wheel_speed is None:
+                return
+            self.velocity = msg.wheelspeed.wheel_speed
+            self.steering = msg.steering_info.steering_angle/12.5
 
         if self.vehicle_status_available is False:
-            self.vehicle_status_available = True        
+            self.vehicle_status_available = True  
 
     
     def waypoint_visualize(self,x_ref,y_ref,psi_ref):
@@ -183,7 +200,7 @@ class Stanley_ctrl:
         if not self.odom_available:
             return
 
-        msg.waypoints = msg.waypoints[0:-1]
+        msg.waypoints = msg.waypoints[5:-1]
         if not self.waypoint_available:
             self.waypoint_available = True
         
@@ -273,10 +290,10 @@ class Stanley_ctrl:
             
             waypoint_dict = self.ref_gen.get_waypoints(p_x[0], p_y[0], psi[0])
             
-            waypoint_dict['x_ref']   = waypoint_dict['x_ref'][2:]
-            waypoint_dict['y_ref']   = waypoint_dict['y_ref'][2:]
-            waypoint_dict['psi_ref']   = waypoint_dict['psi_ref'][2:]
-            waypoint_dict['v_ref']   = waypoint_dict['v_ref'][2:]
+            # waypoint_dict['x_ref']   = waypoint_dict['x_ref'][2:]
+            # waypoint_dict['y_ref']   = waypoint_dict['y_ref'][2:]
+            # waypoint_dict['psi_ref']   = waypoint_dict['psi_ref'][2:]
+            # waypoint_dict['v_ref']   = waypoint_dict['v_ref'][2:]
 
             x_ref    = waypoint_dict['x_ref']            
             y_ref    = waypoint_dict['y_ref']
@@ -321,8 +338,17 @@ class Stanley_ctrl:
             self.control_pub.publish(control_msg)   
         else:
             steering_msg = VehicleSteering()
-            steering_msg.steering_angle = control_msg.steering_angle
+            if self.prev_steering is not None:
+                weighted_steer = self.L_pass_* control_msg.steering_angle + (1-self.L_pass_)*self.prev_steering
+            else: 
+                weighted_steer = steering_msg.steering_angle
+            
+            steering_msg.steering_angle = weighted_steer
             self.steering_pub.publish(steering_msg)
+
+            self.prev_steering = steering_msg.steering_angle
+
+
             vel_msg = Float64()
             vel_msg.data = vel_ref[0]
             self.vel_setpoint_pub.publish(vel_msg)

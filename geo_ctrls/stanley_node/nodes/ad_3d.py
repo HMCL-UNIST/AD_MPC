@@ -47,7 +47,7 @@ class AD3D:
         self.mass = 1500
         self.f_mass = 900
         self.r_mass = self.mass - self.f_mass
-        self.L = 2.6
+        self.L = 1.2
         self.L_F = self.L*(1-self.f_mass/self.mass)
         self.L_R = self.L*(1-self.r_mass/self.mass)
         
@@ -63,8 +63,8 @@ class AD3D:
         self.blend_max = 110
         self.blend_min = 100
         # Input constraints        
-        self.steering_min = -0.42
-        self.steering_max = 0.42
+        self.steering_min = -0.62
+        self.steering_max = 0.62
         self.steering_rate_min = -3 # rate of steering angle [rad/s]
         self.steering_rate_max = 3 # rate of steering angle [rad/s]
         self.acc_min = -5

@@ -56,7 +56,7 @@ class ROSGPMPC:
             }
                             #  p_x,  p_y, psi, v_x, v_y, psi_dot, delta 
         q_diagonal = np.array([10.0, 10.0,  100.0, 0.0, 0.0, 0.0, 0.0])
-        r_diagonal = np.array([1, 100.0])   
+        r_diagonal = np.array([1, 10.0])   
 
         ad_mpc = AD3DMPC(ad, t_horizon=t_horizon, optimization_dt=opt_dt, n_nodes=n_mpc_nodes, 
                             model_name=ad_name, solver_options=acados_config, q_cost=q_diagonal, r_cost=r_diagonal)
@@ -92,7 +92,7 @@ class ROSGPMPC:
         next_control_with_stamp = AckermannDriveStamped()                
         next_control_with_stamp.header = std_msgs.msg.Header()
         next_control_with_stamp.header.stamp = rospy.Time.now()        
-        next_control_with_stamp.drive.steering_angle = x_opt[0,6]
+        next_control_with_stamp.drive.steering_angle = x_opt[1,6]
         next_control_with_stamp.drive.steering_angle_velocity = w_opt[1]        
         next_control_with_stamp.drive.speed = x_opt[0,3]                
         next_control_with_stamp.drive.acceleration =  w_opt[0]        
