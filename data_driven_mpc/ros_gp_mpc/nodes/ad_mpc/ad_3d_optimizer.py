@@ -38,9 +38,9 @@ class AD3DOptimizer:
         :param solver_options: Optional set of extra options dictionary for solvers.        
         """
 
-                            # p_x,  p_y, psi, v_x, v_y, psi_dot, delta
+                            # p_x,  p_y, psi, v_x, v_y, psi_dot
         if q_cost is None:
-            q_cost = np.array([10, 10, 50, 0.0, 0.0, 0.0, 1])
+            q_cost = np.array([10, 10, 50, 0.0, 0.0, 0.0])
         if r_cost is None:
             r_cost = np.array([1.0, 100.0])             
 
@@ -77,15 +77,14 @@ class AD3DOptimizer:
         self.v_x = cs.MX.sym('v_x', 1)  # vel x 
         self.v_y = cs.MX.sym('v_y', 1)  # vel y 
         self.psi_dot = cs.MX.sym('psi_dot', 1)  # psi dot 
-        self.delta = cs.MX.sym('delta', 1)  # delta 
         self.switch = cs.MX.sym('switch',1)
         
           
 
         # Full state vector (7-dimensional)
-        self.x = cs.vertcat(self.p_x, self.p_y, self.psi, self.v_x, self.v_y, self.psi_dot, self.delta)
-        self.state_dim = 7
-        self.x_init = np.zeros(7)
+        self.x = cs.vertcat(self.p_x, self.p_y, self.psi, self.v_x, self.v_y, self.psi_dot)
+        self.state_dim = 6
+        self.x_init = np.zeros(6)
         # Control input vector
         u1 = cs.MX.sym('u1')
         u2 = cs.MX.sym('u2')
@@ -181,13 +180,13 @@ class AD3DOptimizer:
             ocp.constraints.x0 = x_ref
 
             # Set constraints
-            ocp.constraints.lbu = np.array([self.acc_min, self.steering_rate_min])
-            ocp.constraints.ubu = np.array([self.acc_max, self.steering_rate_max])
+            ocp.constraints.lbu = np.array([self.acc_min, self.steering_min])
+            ocp.constraints.ubu = np.array([self.acc_max, self.steering_max])
             ocp.constraints.idxbu = np.array([0, 1])
 
-            ocp.constraints.lbx = np.array([self.steering_min])
-            ocp.constraints.ubx = np.array([self.steering_max])
-            ocp.constraints.idxbx = np.array([6])
+            # ocp.constraints.lbx = np.array([self.steering_min])
+            # ocp.constraints.ubx = np.array([self.steering_max])
+            # ocp.constraints.idxbx = np.array([6])
             
             # Set slacks 
             # ocp.constraints.idxsbx = np.array([1])
@@ -274,8 +273,8 @@ class AD3DOptimizer:
         Inputs: 'x' state of AD (4x1) and 'u' control input (2x1). Output: differential state vector 'x_dot'
         (4x1)
         """
-        x_dot = cs.vertcat(self.p_x_dynamics(), self.p_y_dynamics(), self.psi_dynamics(), self.v_x_dynamics(), self.v_y_dynamics(), self.psi_dot_dynamics(),self.delta_dynamics())
-        return cs.Function('x_dot', [self.x[:7], self.u], [x_dot], ['x', 'u'], ['x_dot'])
+        x_dot = cs.vertcat(self.p_x_dynamics(), self.p_y_dynamics(), self.psi_dynamics(), self.v_x_dynamics(), self.v_y_dynamics(), self.psi_dot_dynamics())
+        return cs.Function('x_dot', [self.x[:6], self.u], [x_dot], ['x', 'u'], ['x_dot'])
 
     def p_x_dynamics(self):                
         return self.v_x*cs.cos(self.psi)-self.v_y*cs.sin(self.psi)
@@ -287,28 +286,26 @@ class AD3DOptimizer:
         return self.psi_dot
 
     def v_x_dynamics(self):
-        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))        
-        v_x_dynamics = self.u[0] - (1/self.mass)*F_f_y*cs.sin(self.delta)+self.v_y*self.psi_dot                 
+        F_f_y = 2*self.Cf*(self.u[1] - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))        
+        v_x_dynamics = self.u[0] - (1/self.mass)*F_f_y*cs.sin(self.u[1])+self.v_y*self.psi_dot                 
         v_x_kinematics = self.u[0]                
         return self.switch*v_x_dynamics+(1-self.switch)*v_x_kinematics
 
     def v_y_dynamics(self):
         F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/(self.v_x+1e-99)
-        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))   
-        v_y_dynamics = 1/self.mass * (  F_r_y + F_f_y*cs.cos(self.delta)) - self.v_x*self.psi_dot  
-        v_y_kinematics = (self.u[1]*self.v_x+self.delta*self.u[0])*self.L_R/(self.L_R+self.L_F)        
+        F_f_y = 2*self.Cf*(self.u[1] - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))   
+        v_y_dynamics = 1/self.mass * (  F_r_y + F_f_y*cs.cos(self.u[1])) - self.v_x*self.psi_dot  
+        v_y_kinematics = (self.u[1]*self.v_x+self.u[1]*self.u[0])*self.L_R/(self.L_R+self.L_F)        
         return self.switch*v_y_dynamics+(1-self.switch)*v_y_kinematics
         
     def psi_dot_dynamics(self):
         F_r_y = 2*self.Cr*(self.L_R*self.psi_dot-self.v_y)/(self.v_x+1e-99)
-        F_f_y = 2*self.Cf*(self.delta - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))           
-        psi_dot_dynamics = (1/self.Iz)*(self.L_F*F_f_y*cs.cos(self.delta)-self.L_R*F_r_y)
-        psi_dot_kinematics = (self.u[1]*self.v_x+self.delta*self.u[0])/(self.L_R+self.L_F)        
+        F_f_y = 2*self.Cf*(self.u[1] - (self.v_y+self.L_F*self.psi_dot)/(self.v_x+1e-99))           
+        psi_dot_dynamics = (1/self.Iz)*(self.L_F*F_f_y*cs.cos(self.u[1])-self.L_R*F_r_y)
+        psi_dot_kinematics = (self.u[1]*self.v_x+self.u[1]*self.u[0])/(self.L_R+self.L_F)        
         return self.switch*psi_dot_dynamics+(1-self.switch)*psi_dot_kinematics
                 
-    def delta_dynamics(self):        
-        return self.u[1]   
-
+  
     def set_reference_state(self, x_target=None, u_target=None):
         """
         Sets the target state and pre-computes the integration dynamics with cost equations
@@ -316,7 +313,7 @@ class AD3DOptimizer:
         :param u_target: 2-dimensional target control input vector (u_1, u_2, u_3, u_4)
         """
         if x_target is None:
-            x_target = [[0, 0, 0, 0, 0, 0, 0]]
+            x_target = [[0, 0, 0, 0, 0, 0]]
             return
         if u_target is None:
             u_target = [0, 0]
@@ -406,7 +403,7 @@ class AD3DOptimizer:
         """
 
         if initial_state is None:
-            initial_state = [0.0] + [0.0]+ [0.0] + [0.0] + [0.0] + [0.0] + [0.0]
+            initial_state = [0.0] + [0.0]+ [0.0] + [0.0] + [0.0] + [0.0]
 
         # Set initial state. Add gp state if needed
         x_init = initial_state

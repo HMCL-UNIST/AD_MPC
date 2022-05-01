@@ -855,3 +855,35 @@ def wrap_to_pi(angle):
         angle += 2.0 * np.pi
 
     return angle 
+
+
+
+
+class ButterWorth2dFilter:
+    def __init__(self,dt,cutoff_hz):
+        self.dt = dt
+        self.cutoff_hz = cutoff_hz
+        self.y1_ = 0.0
+        self.y2_ = 0.0
+        self.u2_ = 0.0
+        self.u1_ = 0.0
+        # /* 2d butterworth lowpass filter with bi-linear transformation */
+        self.wc = 2.0*math.pi*self.cutoff_hz
+        self.n = 2.0 /self.dt
+        self.a0_ = self.n*self.n+math.sqrt(2)*self.wc*self.n+self.wc*self.wc
+        self.a1_ = 2*self.wc*self.wc-2*self.n*self.n
+        self.a2_ = self.n*self.n-math.sqrt(2)*self.wc*self.n+self.wc*self.wc
+        self.b0_ = self.wc*self.wc
+        self.b1_ = 2*self.b0_
+        self.b2_ = self.b0_
+
+    def filter(u0):
+        y0 = (self.b2_*self.u2_+self.b1_*self.u1_+self.b0_*u0-self.a2_*self.y2_-self.a1_*self.y1_)/(self.a0_+1e-10)
+        self.y2_ = self.y1_
+        self.y1_ = y0
+        self.u2_ = self.u1_
+        self.u1_ = u0
+        return y0
+
+    
+        

@@ -30,7 +30,7 @@ from carla_msgs.msg import CarlaEgoVehicleStatus
 
 from ad_mpc.create_ros_ad_mpc import ROSGPMPC
 from ad_mpc.ad_3d import AD3D
-from utils.utils import jsonify, interpol_mse, quaternion_state_mse, load_pickled_models, v_dot_q, \
+from utils.utils import ButterWorth2dFilter, jsonify, interpol_mse, quaternion_state_mse, load_pickled_models, v_dot_q, \
     separate_variables
 from utils.visualization import trajectory_tracking_results, mse_tracking_experiment_plot, \
     load_past_experiments, get_experiment_files
@@ -41,7 +41,7 @@ from utils.utils import quaternion_to_euler, skew_symmetric, v_dot_q, unit_quat,
 from ad_mpc.ref_traj import RefTrajectory
 
 from visualization_msgs.msg import MarkerArray, Marker
-
+from utils.utils import ButterWorth2dFilter
 
 
 def clamp(n, minn, maxn):
@@ -72,6 +72,15 @@ class GPMPCWrapper:
         self.x = None
         self.velocity = None
         self.steering = None        
+
+        ################
+        pose_dt = 0.01
+        self.x_filter        = ButterWorth2dFilter(pose_dt,2)
+        self.y_filter        = ButterWorth2dFilter(pose_dt,2)
+        self.psi_filter      = ButterWorth2dFilter(pose_dt,2)
+        self.steering_filter = ButterWorth2dFilter(pose_dt,2)
+
+        
         
         self.pose_sub_count = 0
         self.minus = 1
@@ -198,11 +207,11 @@ class GPMPCWrapper:
 
         # model_data, x_guess, u_guess = self.set_reference()         --> previous call
         if len(x_ref) < self.n_mpc_nodes:
-            ref = [x_ref[-1], y_ref[-1], psi_ref[-1], 0.0, 0.0, 0.0, 0.0]
+            ref = [x_ref[-1], y_ref[-1], psi_ref[-1], 0.0, 0.0, 0.0]
             u_ref = [0.0, 0.0]   
             terminal_point = True               
         else:        
-            ref = np.zeros([7,len(x_ref)])
+            ref = np.zeros([6,len(x_ref)])
             ref[0] = x_ref
             ref[1] = y_ref
             ref[2] = psi_ref
@@ -257,30 +266,28 @@ class GPMPCWrapper:
            
             # steering_val = max(min(self.steering_rate_max, next_control.drive.steering_angle_velocity), self.steering_rate_min)                        
             ###########################
-            # For angle control ###########################
-            steering_val =  next_control.drive.steering_angle_velocity
-            steering_increment = str_compensate + steering_val*0.05
-            ###########################
-            # For testing ###########################
-            if self.steering > 0.35: 
-                self.minus = -1
-            # elif self.steering < -0.35: 
-            #     self.minus = 1
-            steering_val = 1
-            steering_increment = steering_val*0.05
+            # ###########################
+            # # For testing ###########################
+            # if self.steering > 0.35: 
+            #     self.minus = -1
+            # # elif self.steering < -0.35: 
+            # #     self.minus = 1
+            # steering_val = 1
+            # steering_increment = steering_val*0.05
             
             ###########################
             # For angle control ###########################
             # steering_increment = target_steering_angle - self.steering
             ###########################
-            if steering_val > 0.0:
-                steering_increment = max(steering_increment,0.002)
-            else:
-                steering_increment = min(steering_increment,-0.002) 
-            steering_increment = self.minus*steering_increment
-            control_msg.steering_angle = max(min(self.steering_max, steering_increment+self.steering), self.steering_min)                          
+            # if target_steering_angle > 0.0:
+            #     steering_increment = max(steering_increment,0.002)
+            # else:
+            #     steering_increment = min(steering_increment,-0.002) 
+            # steering_increment = self.minus*steering_increment
+
+            control_msg.steering_angle = target_steering_angle #  max(min(self.steering_max, steering_increment+self.steering), self.steering_min)                          
             
-            self.prev_delta_dot = steering_increment/self.dt
+            # self.prev_delta_dot = steering_increment/self.dt
             self.prev_accel     = w_opt[0]
 
             self.prev_target_steer = control_msg.steering_angle
@@ -304,9 +311,13 @@ class GPMPCWrapper:
                 self.steering_pub.publish(tt_steering)            
             else:
                 steer_msg = VehicleSteering()
-                steer_msg.steering_angle = 0 #control_msg.steering_angle            
-                self.steering_pub.publish(steer_msg)            
+                steer_msg.header.stamp = rospy.Time.now()
+                # steer_msg.steering_angle = control_msg.steering_angle   
+                steer_msg.steering_angle = self.steering_filter.filter(control_msg.steering_angle)         
+                self.steering_pub.publish(steer_msg)       
+
                 acc_msg = VehicleSCC()
+                acc_msg.header.stamp = rospy.Time.now()
                 acc_msg.acceleration = 0 # w_opt[0]
                 self.scc_pub.publish(acc_msg)
                 
@@ -513,23 +524,32 @@ class GPMPCWrapper:
         if self.velocity is None or not self.odom_available or not self.waypoint_available:
             return        
         
-        self.cur_x = msg.pose.position.x
-        self.cur_y = msg.pose.position.y
-        self.cur_z = msg.pose.position.z                
-        cur_euler = quaternion_to_euler([msg.pose.orientation.w,msg.pose.orientation.x,msg.pose.orientation.y,msg.pose.orientation.z])            
-        self.cur_yaw = wrap_to_pi(cur_euler[2])        
         
+
+        # self.cur_x = msg.pose.position.x
+        # self.cur_y = msg.pose.position.y
+        
+        cur_euler = quaternion_to_euler([msg.pose.orientation.w,msg.pose.orientation.x,msg.pose.orientation.y,msg.pose.orientation.z])            
+        # self.cur_yaw = wrap_to_pi(cur_euler[2])        
+        
+        self.cur_x = self.x_filter.filter(msg.pose.position.x)        
+        self.cur_y = self.y_filter.filter(msg.pose.position.y)      
+        self.cur_z = msg.pose.position.z            
+        self.cur_yaw = wrap_to_pi(self.psi_filter.filter(cur_euler[2]))         
+        
+        
+
         p_x = [self.cur_x]
         p_y = [self.cur_y]
         psi = [self.cur_yaw] 
         v_x = [self.v_x]
         v_y = [self.v_y]
         psi_dot = [self.psi_dot]        
-        steering = [self.steering]
+        
 
-        self.x = p_x+p_y+psi+v_x+v_y+psi_dot+steering
+        self.x = p_x+p_y+psi+v_x+v_y+psi_dot
         # dt = 0.05 
-        self.predicted_states(self.x)
+        # self.predicted_states(self.x)
         
         self.pose_sub_count = self.pose_sub_count+1
         if self.pose_sub_count < 10:
