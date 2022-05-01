@@ -4,7 +4,7 @@ import rosbag
 import time
 import rospy
 import scipy.io as sio
-from scipy.signal import filtfilt
+from scipy.signal import filtfilt, butter
 
 
 def compute_curvature(cdists, psis):
@@ -67,7 +67,11 @@ class RefTrajectory():
 	def set_traj(self,x_ref, y_ref, psi_ref, vel_ref):
 		if self.getting_waypoints:
 			return
-		
+		# b, a = butter(2, 0.125)  ## number of order ./ and critical ferquency 
+		x_ref =  filtfilt(np.ones((11,))/11, 1, x_ref)
+		y_ref =  filtfilt(np.ones((11,))/11, 1, y_ref)
+		psi_ref =  filtfilt(np.ones((11,))/11, 1, psi_ref)
+
 		Xs = []
 		Ys = []
 		cdists = []
