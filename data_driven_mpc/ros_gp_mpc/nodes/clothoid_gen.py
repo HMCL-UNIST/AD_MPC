@@ -33,14 +33,18 @@ import std_msgs.msg
 from visualization_msgs.msg import MarkerArray, Marker
 from collections import namedtuple
 from utils.clothoidpath import generate_clothoid_paths, draw_clothoids
+import matplotlib.pyplot as plt
+
 Point = namedtuple("Point", ["x", "y"])
 
 
-class Stanley_ctrl:
+class Clothoidgen:
     def __init__(self,environment="carla"):
         self.ad = AD3D(noisy=False, noisy_input= False)
         # Control at 50 (sim) or 60 (real) hz. 
-        
+        self.ktheta = rospy.get_param('~ktheta', default=0.5)
+        self.klat = rospy.get_param('~klat', default=1.0)
+
         self.n_nodes = rospy.get_param('~n_nodes', default=20.0)
         self.t_horizon = rospy.get_param('~t_horizon', default=2.0)
         self.traj_resample_vel = rospy.get_param('~traj_resample_vel', default=True)                
@@ -198,22 +202,32 @@ class Stanley_ctrl:
             self.psi_ref.insert(-1,self.psi_ref[-1])
             self.vel_ref.insert(-1,self.vel_ref[-1])
       
-        self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
+        # self.ref_gen.set_traj(self.x_ref, self.y_ref, self.psi_ref, self.vel_ref)
         
-        num_path_points = 10 # len(self.x_ref)-1
-        start_point = Point(self.cur_x, self.cur_y)
-        start_orientation_list = [self.cur_yaw]        
-        goal_point = Point(self.x_ref[num_path_points], self.y_ref[num_path_points])
-        goal_orientation_list = [self.psi_ref[num_path_points]]        
+        num_path_points = 50 # len(self.x_ref)-1
+        point_resolution = 0.5
+        dist = 5
+        dist_to_idx = int(dist / point_resolution)
+        dist_to_idx = max(min(len(self.x_ref)-1, dist_to_idx), 0)
+        start_point = Point(self.x_ref[0], self.y_ref[0])
+        start_orientation_list = [self.psi_ref[0]]        
+        goal_point = Point(self.x_ref[dist_to_idx], self.y_ref[dist_to_idx])
+        goal_orientation_list = [self.psi_ref[dist_to_idx]]        
         clothoid_paths = generate_clothoid_paths(start_point, start_orientation_list,goal_point, goal_orientation_list,num_path_points)
-        show_animation = True
-       
+        
+
         x_clothoid = [p.x for p in clothoid_paths[0]]
         y_clothoid = [p.y for p in clothoid_paths[0]]
-
-        self.waypoint_visualize(x_clothoid,y_clothoid,self.psi_ref[:len(x_clothoid)])
-        # if show_animation:
-        #     draw_clothoids(start_point, goal_point,num_path_points, clothoid_paths,save_animation=False)
+        psi_clothoid = []
+        psi_clothoid.append(self.psi_ref[0])
+        for i in range(1,len(y_clothoid)):
+            psi_ = math.atan2(y_clothoid[i]-y_clothoid[i-1],x_clothoid[i]-x_clothoid[i-1]+1e-6)
+            psi_ = wrap_to_pi(psi_)
+            psi_clothoid.append(psi_)
+        
+        vel_clothoid = np.linspace(self.vel_ref[0],self.vel_ref[-1],len(x_clothoid))
+        estimated_curvature = self.ref_gen.set_traj(x_clothoid, y_clothoid, psi_clothoid, vel_clothoid)        
+        self.waypoint_visualize(x_clothoid,y_clothoid,psi_clothoid)                
 
 
         
@@ -262,71 +276,67 @@ class Stanley_ctrl:
         psi_dot = [self.psi_dot]        
         steering = [self.steering]
 
-        self.x = p_x+p_y+psi+v_x+v_y+psi_dot+steering
+        self.x = p_x+p_y+psi+v_x+v_y+psi_dot+steering        
+        self.ref_gen.get_waypoints(self.cur_x, self.cur_y, self.cur_yaw)
         
-        try:
+        waypoint_dict = self.ref_gen.get_waypoints(p_x[0], p_y[0], psi[0])
             
-            # reset the reference traj 
-            if self.waypoint_available is False:
-                return
+        x_ref = waypoint_dict['x_ref'][0]
+        y_ref = waypoint_dict['x_ref'][0]
+        
+        e_psi_ = waypoint_dict['e_psi0']        
+        e_y_ = waypoint_dict['e_y0']        
+        curv_ = waypoint_dict['curv_ref'][0]
+   
+        tmp1 = -1*self.ktheta*math.sin(e_psi_)
+        vx_tmp = max(0.1, self.v_x)
+        tmp2 = -1*(self.ktheta*self.klat*e_y_)/(vx_tmp)
+     
+        tmp3 = +(curv_*math.cos(e_psi_))/(1-curv_*e_y_)
+   
+        summs = tmp1+tmp2+tmp3
             
-            
-            waypoint_dict = self.ref_gen.get_waypoints(p_x[0], p_y[0], psi[0])
-            
-            waypoint_dict['x_ref']   = waypoint_dict['x_ref'][2:]
-            waypoint_dict['y_ref']   = waypoint_dict['y_ref'][2:]
-            waypoint_dict['psi_ref']   = waypoint_dict['psi_ref'][2:]
-            waypoint_dict['v_ref']   = waypoint_dict['v_ref'][2:]
+        delta = math.atan(self.ad.L*summs)
+        print(delta*180/math.pi)
+       
+        # self.ktheta 
+        # self.klat 
 
-            x_ref    = waypoint_dict['x_ref']            
-            y_ref    = waypoint_dict['y_ref']
-            psi_ref = waypoint_dict['psi_ref']        
-            vel_ref = waypoint_dict['v_ref']                  
-                
-            # self.waypoint_visualize(x_ref,y_ref,psi_ref)
-            
-        except AttributeError:
-            rospy.loginfo("......set_state fail")
-            return
+        # target_idx, error_front_axle = self.calc_target_index(current_state, waypoint_dict)
+        # if self.last_target_idx >= self.current_target_idx:
+        #     self.current_target_idx = self.last_target_idx
 
-        if self.pose_available is False:
-            self.pose_available = True        
-        current_state = [self.cur_x, self.cur_y, self.cur_yaw]
-        ###################### stanley controller 
-        target_idx, error_front_axle = self.calc_target_index(current_state, waypoint_dict)
-        if self.last_target_idx >= self.current_target_idx:
-            self.current_target_idx = self.last_target_idx
-
-        # theta_e corrects the heading error
-        theta_e = wrap_to_pi(psi_ref[self.current_target_idx] - self.cur_yaw)
-        # theta_d corrects the cross track error
-        theta_d = np.arctan2(self.stanley_gain_k * error_front_axle, np.sqrt(self.v_x**2 + self.v_y**2))
-        # Steering control
-        delta = theta_e + theta_d
-
+        # # theta_e corrects the heading error
+        # theta_e = wrap_to_pi(psi_ref[self.current_target_idx] - self.cur_yaw)
+        # # theta_d corrects the cross track error
+        # theta_d = np.arctan2(self.stanley_gain_k * error_front_axle, np.sqrt(self.v_x**2 + self.v_y**2))
+        # # Steering control
+        # delta = theta_e + theta_d
+        
         next_control = AckermannDriveStamped()                
         next_control.header = std_msgs.msg.Header()
-        next_control.header.stamp = rospy.Time.now()        
-        next_control.drive.steering_angle = delta
+        next_control.header.stamp = rospy.Time.now()         
+        next_control.drive.steering_angle = max(min(self.steering_max, delta), self.steering_min)         
         next_control.drive.steering_angle_velocity = 0        
         next_control.drive.speed = 0.0 # 5                
-        next_control.drive.acceleration =  0.0 #2# w_opt[0]   
+        next_control.drive.acceleration =  2# w_opt[0]   
         control_msg = AckermannDrive()
-        control_msg = next_control.drive                                                                             
-        control_msg.steering_angle = max(min(self.steering_max, delta), self.steering_min)                        
+        control_msg.steering_angle = next_control.drive.steering_angle           
+        control_msg = next_control.drive                                                          
         tt_steering = Float64()
-        tt_steering.data = 0.0 #  -1*control_msg.steering_angle            
+        tt_steering.data = -1*control_msg.steering_angle            
    
-        # self.steering_pub.publish(tt_steering)            
-        # self.control_pub.publish(control_msg)   
+        self.steering_pub.publish(tt_steering)            
+        self.control_pub.publish(control_msg)
+
 
      
 ###################################################################################
 
 def main():
-    rospy.init_node("stanley")
+    rospy.init_node("clothoidgen")
     env = rospy.get_param('~environment', default='gazebo')
-    Stanley_ctrl(env)
+    Clothoidgen(env)
 
 if __name__ == "__main__":
     main()

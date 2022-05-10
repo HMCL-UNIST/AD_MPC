@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<launch>
+    
+    
+    
+    
+    <arg name="t_horizon" default="2"/>
+    <arg name="n_nodes" default="40"/>
+    <arg name="traj_resample_vel" default="true"/>
+
+
+    <node pkg="ros_gp_mpc" type="clothoid_gen.py" name="mpc_wrapper" output="screen">
+        <rosparam file="$(find ros_gp_mpc)/config/simulation_run.yaml"/>
+        <param name="t_horizon" value="$(arg t_horizon)"/>
+        <param name="n_nodes" value="$(arg n_nodes)"/>                
+        <param name="traj_resample_vel" value="$(arg traj_resample_vel)"/>    
+    </node>
+
+
+
+    
+</launch>

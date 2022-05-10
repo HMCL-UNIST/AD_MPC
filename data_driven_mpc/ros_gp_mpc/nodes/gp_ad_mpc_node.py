@@ -297,8 +297,8 @@ class GPMPCWrapper:
         for i, xx in enumerate(x_ref):
             marker_ref = Marker()
             marker_ref.header.frame_id = "map"  
-            marker_ref.ns = "mpc_ref"+str(i)
-            marker_ref.id = i
+            marker_ref.ns = "mpc_ref"+str(i*2)
+            marker_ref.id = i*2
             marker_ref.type = Marker.ARROW
             marker_ref.action = Marker.ADD                
             marker_ref.pose.position.x = x_ref[i] 
